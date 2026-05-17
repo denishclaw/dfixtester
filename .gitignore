@@ -1,4 +1,5 @@
 # Ignore Maven build outputs (The symlinked directory)
+target
 target/
 *.jar
 *.war
