@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadSessions();
     loadTemplates();
+    setupHeartbeatFilter();
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
 });
@@ -54,8 +55,16 @@ async function fetchMessages() {
 
             const time = new Date(msg.timestamp).toLocaleTimeString();
             
+            const isHeartbeat = /(?:^|\|)35=0\|/.test(msg.message);
+            const hideHeartbeats = document.getElementById('filterHeartbeatsCheck')?.checked;
+
             const tr = document.createElement('tr');
-            tr.className = rowColorClass;
+            tr.className = rowColorClass + (isHeartbeat ? ' heartbeat-msg' : '');
+            tr.style.cursor = 'pointer';
+            if (isHeartbeat && hideHeartbeats) {
+                tr.style.display = 'none';
+            }
+            tr.onclick = () => handleMessageClick(msg.message);
             tr.innerHTML = `
                 <td class="text-nowrap">${time}</td>
                 <td class="text-nowrap">${msg.session}</td>
@@ -74,6 +83,29 @@ async function fetchMessages() {
     } catch (e) {
         console.error("Failed to fetch messages", e);
     }
+}
+
+function setupHeartbeatFilter() {
+    const container = document.getElementById('messageLogContainer');
+    if (container && container.parentNode) {
+        const filterDiv = document.createElement('div');
+        filterDiv.className = 'form-check mb-2';
+        filterDiv.innerHTML = `
+            <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="toggleHeartbeats()">
+            <label class="form-check-label fw-bold" for="filterHeartbeatsCheck">
+                Hide Heartbeat Messages (35=0)
+            </label>
+        `;
+        container.parentNode.insertBefore(filterDiv, container);
+    }
+}
+
+function toggleHeartbeats() {
+    const hide = document.getElementById('filterHeartbeatsCheck').checked;
+    const rows = document.querySelectorAll('#messageLogTable tbody tr.heartbeat-msg');
+    rows.forEach(row => {
+        row.style.display = hide ? 'none' : '';
+    });
 }
 
 async function loadSessions() {
@@ -256,8 +288,21 @@ async function sendMessage() {
         body: JSON.stringify(tagMap)
     });
     
-    if (res.ok) alert("Message sent successfully.");
-    else alert("Error sending message: " + await res.text());
+    if (!res.ok) alert("Error sending message: " + await res.text());
+}
+
+function handleMessageClick(rawMessage) {
+    const match = rawMessage.match(/(?:^|\|)11=([^|]+)/);
+    if (match && match[1]) {
+        const clOrdId = match[1];
+        document.querySelectorAll('.tag-row').forEach(row => {
+            const tagInput = row.querySelector('.fix-tag');
+            const valInput = row.querySelector('.fix-val');
+            if (tagInput && tagInput.value.trim() === "41") {
+                valInput.value = clOrdId;
+            }
+        });
+    }
 }
 
 async function replayMessages() {
