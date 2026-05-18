@@ -158,7 +158,7 @@ async function sessionAction(sessionString, action) {
 
 function addTagRow(defaultTag = "", defaultValue = "") {
     const row = document.createElement('div');
-    row.className = 'input-group mb-2 w-50 tag-row';
+    row.className = 'input-group mb-2 w-100 tag-row';
     row.innerHTML = `
         <span class="input-group-text">Tag</span>
         <input type="text" class="form-control fix-tag" placeholder="e.g. 35" value="${defaultTag}">
@@ -215,16 +215,7 @@ function applyTemplate() {
     
     if (template && template.tags) {
         for (const [tag, value] of Object.entries(template.tags)) {
-            let finalValue = value;
-            
-            // Inject system-generated dynamic values
-            if (tag === "11") {
-                finalValue = "ORD_" + Date.now();
-            } else if (tag === "60") {
-                finalValue = generateFixTimestamp();
-            }
-            
-            addTagRow(tag, finalValue);
+            addTagRow(tag, value);
         }
     }
 }
@@ -243,8 +234,19 @@ async function sendMessage() {
 
     const tagMap = {};
     document.querySelectorAll('.tag-row').forEach(row => {
-        const tag = row.querySelector('.fix-tag').value.trim();
-        const val = row.querySelector('.fix-val').value.trim();
+        const tagInput = row.querySelector('.fix-tag');
+        const valInput = row.querySelector('.fix-val');
+        const tag = tagInput.value.trim();
+        let val = valInput.value.trim();
+        
+        if (tag === "11") {
+            val = "ORD_" + Date.now();
+            valInput.value = val; // Update the UI field so the user sees what was actually sent
+        } else if (tag === "60") {
+            val = generateFixTimestamp();
+            valInput.value = val; // Update the UI field so the user sees what was actually sent
+        }
+        
         if (tag && val) tagMap[tag] = val;
     });
 
