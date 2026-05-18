@@ -64,7 +64,7 @@ async function fetchMessages() {
             if (isHeartbeat && hideHeartbeats) {
                 tr.style.display = 'none';
             }
-            tr.onclick = () => handleMessageClick(msg.message);
+            tr.onclick = () => handleMessageClick(msg.message, tr);
             tr.innerHTML = `
                 <td class="text-nowrap">${time}</td>
                 <td class="text-nowrap">${msg.session}</td>
@@ -86,17 +86,17 @@ async function fetchMessages() {
 }
 
 function setupHeartbeatFilter() {
-    const container = document.getElementById('messageLogContainer');
-    if (container && container.parentNode) {
+    const table = document.getElementById('messageLogTable');
+    if (table && table.parentNode) {
         const filterDiv = document.createElement('div');
-        filterDiv.className = 'form-check mb-2';
+        filterDiv.className = 'form-check mb-2 mt-2';
         filterDiv.innerHTML = `
             <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="toggleHeartbeats()">
             <label class="form-check-label fw-bold" for="filterHeartbeatsCheck">
                 Hide Heartbeat Messages (35=0)
             </label>
         `;
-        container.parentNode.insertBefore(filterDiv, container);
+        table.parentNode.insertBefore(filterDiv, table);
     }
 }
 
@@ -291,15 +291,40 @@ async function sendMessage() {
     if (!res.ok) alert("Error sending message: " + await res.text());
 }
 
-function handleMessageClick(rawMessage) {
-    const match = rawMessage.match(/(?:^|\|)11=([^|]+)/);
-    if (match && match[1]) {
-        const clOrdId = match[1];
+function handleMessageClick(rawMessage, rowElement) {
+    // 1. Visual feedback that the row was clicked
+    if (rowElement) {
+        const origFilter = rowElement.style.filter;
+        rowElement.style.filter = 'brightness(85%)';
+        setTimeout(() => rowElement.style.filter = origFilter, 300);
+    }
+
+    const tagMap = {};
+    // 2. Map Tag 11 from the message to Tag 41 in the template (OrigClOrdID)
+    const match11 = rawMessage.match(/(?:^|\|)11=([^|]+)/);
+    if (match11 && match11[1]) tagMap["41"] = match11[1];
+    
+    // 3. Extract Symbol (55) and OrderQty (38) to auto-fill Cancel/Replace templates as well
+    const match55 = rawMessage.match(/(?:^|\|)55=([^|]+)/);
+    if (match55 && match55[1]) tagMap["55"] = match55[1];
+    
+    const match38 = rawMessage.match(/(?:^|\|)38=([^|]+)/);
+    if (match38 && match38[1]) tagMap["38"] = match38[1];
+
+    if (Object.keys(tagMap).length > 0) {
         document.querySelectorAll('.tag-row').forEach(row => {
             const tagInput = row.querySelector('.fix-tag');
             const valInput = row.querySelector('.fix-val');
-            if (tagInput && tagInput.value.trim() === "41") {
-                valInput.value = clOrdId;
+            if (tagInput && valInput) {
+                const tag = tagInput.value.trim();
+                if (tagMap[tag]) {
+                    valInput.value = tagMap[tag];
+                    
+                    // 4. Highlight the updated input briefly so it's obvious it was filled
+                    const origBg = valInput.style.backgroundColor;
+                    valInput.style.backgroundColor = '#d1e7dd'; // light green
+                    setTimeout(() => { valInput.style.backgroundColor = origBg; }, 600);
+                }
             }
         });
     }
