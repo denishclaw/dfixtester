@@ -1,7 +1,9 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadDictionary();
     loadSessions();
     loadTemplates();
     setupHeartbeatFilter();
+    setupReplayThrottle();
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
 });
@@ -22,6 +24,17 @@ const sessionColors = [
     'table-success',
     'table-danger'
 ];
+
+let fixDictionary = {};
+
+async function loadDictionary() {
+    try {
+        const res = await fetch('/api/dictionary');
+        fixDictionary = await res.json();
+    } catch (err) {
+        console.error('Failed to load dictionary', err);
+    }
+}
 
 function startMessagePolling() {
     if (messagePollInterval) clearInterval(messagePollInterval);
@@ -69,8 +82,14 @@ async function fetchMessages() {
                 <td class="text-nowrap">${time}</td>
                 <td class="text-nowrap">${msg.session}</td>
                 <td>${directionBadge}</td>
-                <td style="word-break: break-all; font-family: monospace; font-size: 0.85em;">${msg.message}</td>
+                <td style="word-break: break-all; font-family: monospace; font-size: 0.85em;">
+                    <span title="View Details" class="view-details-icon" style="cursor: pointer; font-size: 1.1em; margin-right: 8px;">&#128269;</span>${msg.message}
+                </td>
             `;
+            
+            const icon = tr.querySelector('.view-details-icon');
+            icon.onclick = (event) => showFixMessageDetails(event, msg.message);
+            
             tbody.appendChild(tr);
             addedNew = true;
         });
@@ -86,17 +105,36 @@ async function fetchMessages() {
 }
 
 function setupHeartbeatFilter() {
-    const table = document.getElementById('messageLogTable');
-    if (table && table.parentNode) {
+    const container = document.getElementById('messageLogContainer');
+    if (container && container.parentNode) {
         const filterDiv = document.createElement('div');
-        filterDiv.className = 'form-check mb-2 mt-2';
+        filterDiv.className = 'form-check mb-2';
         filterDiv.innerHTML = `
             <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="toggleHeartbeats()">
             <label class="form-check-label fw-bold" for="filterHeartbeatsCheck">
                 Hide Heartbeat Messages (35=0)
             </label>
         `;
-        table.parentNode.insertBefore(filterDiv, table);
+        container.parentNode.insertBefore(filterDiv, container);
+    }
+}
+
+function setupReplayThrottle() {
+    const replayJson = document.getElementById('replayJson');
+    if (replayJson && replayJson.parentNode) {
+        const throttleDiv = document.createElement('div');
+        throttleDiv.className = 'mb-2 d-flex align-items-center gap-3';
+        throttleDiv.innerHTML = `
+            <div class="d-flex align-items-center">
+                <label class="form-label fw-bold mb-0 me-2 text-nowrap" for="replayThrottleMs">Throttling (ms):</label>
+                <input type="number" id="replayThrottleMs" class="form-control" value="100" min="0" style="width: 100px;">
+            </div>
+            <div class="d-flex align-items-center">
+                <label class="form-label fw-bold mb-0 me-2 text-nowrap" for="replayRepeat">Repeat Times:</label>
+                <input type="number" id="replayRepeat" class="form-control" value="1" min="1" style="width: 100px;">
+            </div>
+        `;
+        replayJson.parentNode.insertBefore(throttleDiv, replayJson);
     }
 }
 
@@ -191,14 +229,23 @@ async function sessionAction(sessionString, action) {
 function addTagRow(defaultTag = "", defaultValue = "") {
     const row = document.createElement('div');
     row.className = 'input-group mb-2 w-100 tag-row';
+    const desc = fixDictionary[defaultTag] ? ` (${fixDictionary[defaultTag]})` : '';
+    
     row.innerHTML = `
-        <span class="input-group-text">Tag</span>
-        <input type="text" class="form-control fix-tag" placeholder="e.g. 35" value="${defaultTag}">
+        <span class="input-group-text tag-label" style="width: 170px; display: inline-block; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Tag${desc}</span>
+        <input type="text" class="form-control fix-tag" placeholder="e.g. 35" value="${defaultTag}" oninput="updateTagLabel(this)">
         <span class="input-group-text">Value</span>
         <input type="text" class="form-control fix-val" placeholder="e.g. D" value="${defaultValue}">
         <button class="btn btn-outline-danger" onclick="this.parentElement.remove()">X</button>
     `;
     document.getElementById('tagRows').appendChild(row);
+}
+
+function updateTagLabel(input) {
+    const tag = input.value.trim();
+    const label = input.parentElement.querySelector('.tag-label');
+    const desc = fixDictionary[tag] ? ` (${fixDictionary[tag]})` : '';
+    label.innerText = `Tag${desc}`;
 }
 
 async function loadTemplates() {
@@ -330,6 +377,92 @@ function handleMessageClick(rawMessage, rowElement) {
     }
 }
 
+function showFixMessageDetails(event, rawMessage) {
+    event.stopPropagation(); // Prevent the row click event from firing and autofilling tags
+
+    let popup = document.getElementById('fixDetailsPopup');
+    let backdrop = document.getElementById('fixDetailsBackdrop');
+
+    if (!popup) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'fixDetailsBackdrop';
+        backdrop.style.position = 'fixed';
+        backdrop.style.top = '0';
+        backdrop.style.left = '0';
+        backdrop.style.width = '100vw';
+        backdrop.style.height = '100vh';
+        backdrop.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        backdrop.style.zIndex = '1040';
+        backdrop.onclick = () => {
+            popup.style.display = 'none';
+            backdrop.style.display = 'none';
+        };
+        document.body.appendChild(backdrop);
+
+        popup = document.createElement('div');
+        popup.id = 'fixDetailsPopup';
+        popup.className = 'card shadow';
+        popup.style.position = 'fixed';
+        popup.style.top = '50%';
+        popup.style.left = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.zIndex = '1050';
+        popup.style.maxHeight = '85vh';
+        popup.style.width = '90vw';
+        popup.style.maxWidth = '600px';
+        popup.style.display = 'flex';
+        popup.style.flexDirection = 'column';
+
+        document.body.appendChild(popup);
+    }
+    
+    popup.style.display = 'flex';
+    backdrop.style.display = 'block';
+
+    let html = `
+        <div class="card-header d-flex justify-content-between align-items-center bg-light">
+            <h5 class="m-0">FIX Message Details</h5>
+            <button type="button" class="btn-close" onclick="document.getElementById('fixDetailsPopup').style.display='none'; document.getElementById('fixDetailsBackdrop').style.display='none';"></button>
+        </div>
+        <div class="card-body p-0" style="overflow-y: auto;">
+            <table class="table table-sm table-bordered table-striped mb-0">
+                <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                    <tr>
+                        <th class="ps-3" style="width: 20%;">Tag</th>
+                        <th style="width: 40%;">Description</th>
+                        <th style="width: 40%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+    `;
+
+    const fields = rawMessage.split('|');
+    fields.forEach(field => {
+        if (!field) return;
+        const parts = field.split('=');
+        if (parts.length === 2) {
+            const tag = parts[0];
+            const value = parts[1];
+            const desc = fixDictionary[tag] || '';
+            html += `
+                <tr>
+                    <td class="fw-bold ps-3">${tag}</td>
+                    <td>${desc}</td>
+                    <td style="font-family: monospace; word-break: break-all;">${value}</td>
+                </tr>
+            `;
+        }
+    });
+
+    html += `
+                </tbody>
+            </table>
+        </div>
+    `;
+    popup.innerHTML = html;
+}
+
 async function replayMessages() {
     const targetSession = document.getElementById('replaySessionSelect').value;
     let payload;
@@ -340,7 +473,19 @@ async function replayMessages() {
         return alert("Invalid JSON format in replay window.");
     }
 
-    const res = await fetch(`/api/sessions/${encodeURIComponent(targetSession)}/replay`, {
+    let throttle = 100;
+    const throttleInput = document.getElementById('replayThrottleMs');
+    if (throttleInput) {
+        throttle = parseInt(throttleInput.value, 10) || 0;
+    }
+
+    let repeat = 1;
+    const repeatInput = document.getElementById('replayRepeat');
+    if (repeatInput) {
+        repeat = parseInt(repeatInput.value, 10) || 1;
+    }
+
+    const res = await fetch(`/api/sessions/${encodeURIComponent(targetSession)}/replay?throttle=${throttle}&repeat=${repeat}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)

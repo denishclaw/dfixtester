@@ -13,6 +13,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 
 @RestController
 @RequestMapping("/api/sessions")
@@ -23,6 +26,8 @@ public class SessionController {
 
     @Autowired
     private FixApplication fixApplication;
+    
+    private static final DateTimeFormatter FIX_UTC_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS").withZone(ZoneId.of("UTC"));
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getSessions() {
@@ -118,15 +123,37 @@ public class SessionController {
     }
 
     @PostMapping("/{sessionString}/replay")
-    public ResponseEntity<String> replayMessages(@PathVariable String sessionString, @RequestBody List<Map<String, String>> messages) {
+    public ResponseEntity<String> replayMessages(
+            @PathVariable String sessionString,
+            @RequestParam(defaultValue = "100") long throttle,
+            @RequestParam(defaultValue = "1") int repeat,
+            @RequestBody List<Map<String, String>> messages) {
         try {
             SessionID sessionId = new SessionID(sessionString);
-            for (Map<String, String> tags : messages) {
-                Message msg = buildMessage(tags);
-                Session.sendToTarget(msg, sessionId);
-                Thread.sleep(100); // Small 100ms delay between replay messages
+            int count = 0;
+            
+            for (int i = 0; i < repeat; i++) {
+                for (Map<String, String> originalTags : messages) {
+                    Map<String, String> tags = new HashMap<>(originalTags);
+                    
+                    // Dynamically generate Tags 11 and 60 just like Send Single Message
+                    if (tags.containsKey("11")) {
+                        tags.put("11", "ORD_" + System.currentTimeMillis() + "_" + count);
+                    }
+                    if (tags.containsKey("60")) {
+                        tags.put("60", FIX_UTC_TIMESTAMP_FORMATTER.format(Instant.now()));
+                    }
+                    
+                    Message msg = buildMessage(tags);
+                    Session.sendToTarget(msg, sessionId);
+                    count++;
+                    
+                    if (throttle > 0) {
+                        Thread.sleep(throttle);
+                    }
+                }
             }
-            return ResponseEntity.ok("Replayed " + messages.size() + " messages successfully.");
+            return ResponseEntity.ok("Replayed " + count + " messages successfully.");
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error: " + e.getMessage());
         }
