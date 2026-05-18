@@ -3,9 +3,9 @@ package com.dfixtester.config;
 import com.dfixtester.engine.FixApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
 import quickfix.*;
 
+import java.io.FileInputStream;
 import java.io.InputStream;
 
 @Configuration
@@ -13,7 +13,7 @@ public class FixConfig {
 
     @Bean
     public ThreadedSocketInitiator threadedSocketInitiator(FixApplication fixApplication) throws Exception {
-        InputStream inputStream = new ClassPathResource("quickfix-client.cfg").getInputStream();
+        InputStream inputStream = new FileInputStream("config/fix-sessions.cfg");
         SessionSettings settings = new SessionSettings(inputStream);
         
         MessageStoreFactory storeFactory = new FileStoreFactory(settings);

@@ -1,5 +1,6 @@
 package com.dfixtester.web;
 
+import com.dfixtester.engine.FixApplication;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,9 @@ public class SessionController {
     @Autowired
     private ThreadedSocketInitiator initiator;
 
+    @Autowired
+    private FixApplication fixApplication;
+
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getSessions() {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -28,6 +32,8 @@ public class SessionController {
             Map<String, Object> sessionData = new HashMap<>();
             sessionData.put("sessionString", session.getSessionID().toString());
             sessionData.put("isLoggedOn", session.isLoggedOn());
+            sessionData.put("inSeq", session.getExpectedTargetNum());
+            sessionData.put("outSeq", session.getExpectedSenderNum());
             result.add(sessionData);
         }
         return ResponseEntity.ok(result);
@@ -42,9 +48,38 @@ public class SessionController {
             if (session == null) {
                 return ResponseEntity.status(404).body("Session not found.");
             }
+            if (session.isLoggedOn()) {
+                return ResponseEntity.status(400).body("Cannot reset sequence numbers while session is logged on.");
+            }
             
             session.reset();
             return ResponseEntity.ok("Sequence reset successfully for: " + sessionString);
+        } catch (Exception e) {
+            return ResponseEntity.status(500).body("Error: " + e.getMessage());
+        }
+    }
+
+    @PostMapping("/{sessionString}/setseq")
+    public ResponseEntity<String> setSequence(@PathVariable String sessionString, @RequestBody Map<String, Integer> seqNums) {
+        try {
+            SessionID sessionId = new SessionID(sessionString);
+            Session session = Session.lookupSession(sessionId);
+
+            if (session == null) {
+                return ResponseEntity.status(404).body("Session not found.");
+            }
+
+            if (session.isLoggedOn()) {
+                return ResponseEntity.status(400).body("Cannot set sequence numbers while session is logged on.");
+            }
+
+            if (seqNums.containsKey("inSeq")) {
+                session.setNextTargetMsgSeqNum(seqNums.get("inSeq"));
+            }
+            if (seqNums.containsKey("outSeq")) {
+                session.setNextSenderMsgSeqNum(seqNums.get("outSeq"));
+            }
+            return ResponseEntity.ok("Sequence numbers updated for: " + sessionString);
         } catch (Exception e) {
             return ResponseEntity.status(500).body("Error: " + e.getMessage());
         }
@@ -108,5 +143,16 @@ public class SessionController {
             }
         }
         return msg;
+    }
+
+    @GetMapping("/messages")
+    public ResponseEntity<List<Map<String, Object>>> getMessages(@RequestParam(defaultValue = "0") long since) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Map<String, Object> msg : fixApplication.getMessageLog()) {
+            if ((Long) msg.get("id") > since) {
+                result.add(msg);
+            }
+        }
+        return ResponseEntity.ok(result);
     }
 }

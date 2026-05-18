@@ -1,4 +1,4 @@
-package com.fixtester;
+package com.dfixtester;
 
 import org.junit.platform.suite.api.ConfigurationParameter;
 import org.junit.platform.suite.api.IncludeEngines;

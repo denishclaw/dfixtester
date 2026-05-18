@@ -3,55 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DFixTester Control Panel</title>
+    <title>DFixTester</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
-<body class="container mt-4 mb-5">
-    <h1 class="mb-4">DFixTester</h1>
-    
-    <h3>Active Sessions</h3>
-    <table class="table table-bordered table-striped" id="sessionTable">
-        <thead class="table-dark">
-            <tr>
-                <th>Session String</th>
-                <th>Status</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
+<body>
+<div class="container mt-4">
+    <h2 class="mb-4">DFixTester Dashboard</h2>
+<!-- Tab Navigation Menu -->
+<ul class="nav nav-tabs mb-4">
+    <li class="nav-item">
+        <a class="nav-link active" href="#" onclick="showTab('session-tab', this); return false;">Session Management</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="#" onclick="showTab('send-orders-tab', this); return false;">Send Orders</a>
+    </li>
+    <li class="nav-item">
+        <a class="nav-link" href="#" onclick="showTab('test-tab', this); return false;">Run Tests</a>
+    </li>
+</ul>
 
-    <hr class="my-4">
-    
-    <h3>Send Message</h3>
-    <div class="mb-3 w-50">
-        <label for="sendSessionSelect" class="form-label">Target Session:</label>
-        <select id="sendSessionSelect" class="form-select"></select>
+<!-- Tab Content -->
+<div class="tab-content">
+    <!-- Session Management Tab -->
+    <div id="session-tab" class="tab-pane active" style="display: block;">
+        <h4>Session Management</h4>
+        <table id="sessionTable" class="table table-bordered mt-3">
+            <thead class="table-light">
+                <tr>
+                    <th>Session</th>
+                    <th>Status</th>
+                    <th style="width: 100px;">Next InSeq</th>
+                    <th style="width: 100px;">Next OutSeq</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
     </div>
-    <div id="tagRows"></div>
-    <button class="btn btn-outline-secondary mb-3" onclick="addTagRow()">+ Add Another Tag</button>
-    <br>
-    <button class="btn btn-primary" onclick="sendMessage()">Send Message</button>
 
-    <hr class="my-4">
-    
-    <h3>Replay Messages</h3>
-    <div class="mb-3 w-50">
-        <label for="replaySessionSelect" class="form-label">Target Session:</label>
-        <select id="replaySessionSelect" class="form-select"></select>
+    <!-- Send Orders Tab -->
+    <div id="send-orders-tab" class="tab-pane" style="display: none;">
+        <div class="row">
+            <div class="col-md-5">
+                <div class="mb-5">
+                    <h4>Send Single Message</h4>
+                    <label>Target Session:</label>
+                    <select id="sendSessionSelect" class="form-select mb-3"></select>
+                    
+                    <div id="tagRows"></div>
+                    <button class="btn btn-secondary mb-3" onclick="addTagRow()">+ Add Tag</button>
+                    <button class="btn btn-primary mb-3" onclick="sendMessage()">Send Message</button>
+                </div>
+
+                <div>
+                    <h4>Send Multiple Messages</h4>
+                    <label>Target Session:</label>
+                    <select id="replaySessionSelect" class="form-select mb-3"></select>
+                    
+                    <textarea id="replayJson" class="form-control mb-3" rows="10" placeholder='[{"35":"D", "55":"AAPL"}]'></textarea>
+                    <button class="btn btn-primary" onclick="replayMessages()">Send Multiple</button>
+                </div>
+            </div>
+            <div class="col-md-7">
+                <h4>Message Log</h4>
+                <div id="messageLogContainer" class="table-responsive bg-light p-2 border rounded" style="max-height: 800px; overflow-y: auto;">
+                    <table id="messageLogTable" class="table table-sm">
+                        <thead style="position: sticky; top: 0; background-color: white; z-index: 1;">
+                            <tr>
+                                <th>Time</th>
+                                <th>Session</th>
+                                <th>Dir</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="mb-3 w-75">
-        <label for="replayJson" class="form-label">Messages JSON Payload:</label>
-        <textarea id="replayJson" class="form-control text-monospace" rows="5" placeholder='[{"35":"D", "55":"AAPL", "54":"1"}]'></textarea>
+
+    <!-- Run Tests Tab -->
+    <div id="test-tab" class="tab-pane" style="display: none;">
+        <h4>Run Cucumber Tests</h4>
+        <button class="btn btn-success mb-3" onclick="runTests()">Execute Tests</button>
+        <pre id="testOutput" class="bg-dark text-light p-3 rounded" style="min-height: 200px;">Awaiting execution...</pre>
     </div>
-    <button class="btn btn-warning" onclick="replayMessages()">Replay Messages</button>
-
-    <hr class="my-4">
-    
-    <h3>Run Tests</h3>
-    <button class="btn btn-info mb-3" onclick="runTests()">Trigger Cucumber Tests</button>
-    <pre id="testOutput" class="bg-light p-3 border rounded"></pre>
-
-    <script src="/app.js"></script>
+</div>
+</div>
+<script src="app.js"></script>
 </body>
 </html>
