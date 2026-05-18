@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', () => {
     loadSessions();
+    loadTemplates();
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
 });
@@ -9,12 +10,16 @@ let messagePollInterval;
 let lastMessageId = 0;
 let sessionColorMap = {};
 let colorIndex = 0;
+let messageTemplates = [];
 
 const sessionColors = [
-    { in: 'table-primary', out: 'table-info' },
-    { in: 'table-success', out: 'table-warning' },
-    { in: 'table-danger', out: 'table-secondary' },
-    { in: 'table-light', out: 'table-active' }
+    'table-light',
+    'table-secondary',
+    'table-primary',
+    'table-info',
+    'table-warning',
+    'table-success',
+    'table-danger'
 ];
 
 function startMessagePolling() {
@@ -42,18 +47,19 @@ async function fetchMessages() {
                 colorIndex++;
             }
             
-            const colorClass = msg.direction === 'IN' 
-                ? sessionColorMap[msg.session].in 
-                : sessionColorMap[msg.session].out;
+            const rowColorClass = sessionColorMap[msg.session];
+            const directionBadge = msg.direction === 'IN' 
+                ? '<span class="badge bg-success">IN</span>' 
+                : '<span class="badge bg-primary">OUT</span>';
 
             const time = new Date(msg.timestamp).toLocaleTimeString();
             
             const tr = document.createElement('tr');
-            tr.className = colorClass;
+            tr.className = rowColorClass;
             tr.innerHTML = `
                 <td class="text-nowrap">${time}</td>
                 <td class="text-nowrap">${msg.session}</td>
-                <td>${msg.direction}</td>
+                <td>${directionBadge}</td>
                 <td style="word-break: break-all; font-family: monospace; font-size: 0.85em;">${msg.message}</td>
             `;
             tbody.appendChild(tr);
@@ -161,6 +167,74 @@ function addTagRow(defaultTag = "", defaultValue = "") {
         <button class="btn btn-outline-danger" onclick="this.parentElement.remove()">X</button>
     `;
     document.getElementById('tagRows').appendChild(row);
+}
+
+async function loadTemplates() {
+    try {
+        const res = await fetch('/api/templates');
+        messageTemplates = await res.json();
+        
+        let templateSelect = document.getElementById('templateSelect');
+        if (!templateSelect) {
+            const tagRows = document.getElementById('tagRows');
+            if (tagRows) {
+                const templateContainer = document.createElement('div');
+                templateContainer.className = 'mb-3';
+                templateContainer.innerHTML = `
+                    <label class="form-label fw-bold">Message Template</label>
+                    <select id="templateSelect" class="form-select" onchange="applyTemplate()">
+                        <option value="">-- Select Template --</option>
+                    </select>
+                `;
+                // Inject right before the tags section
+                tagRows.parentNode.insertBefore(templateContainer, tagRows);
+                templateSelect = document.getElementById('templateSelect');
+            }
+        }
+        
+        if (templateSelect) {
+            templateSelect.innerHTML = '<option value="">-- Select Template --</option>';
+            messageTemplates.forEach((tpl, idx) => {
+                const opt = new Option(tpl.name, idx);
+                templateSelect.add(opt);
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load templates', err);
+    }
+}
+
+function applyTemplate() {
+    const templateIdx = document.getElementById('templateSelect').value;
+    if (templateIdx === "") return;
+    
+    const template = messageTemplates[templateIdx];
+    
+    const tagRows = document.getElementById('tagRows');
+    tagRows.innerHTML = '';
+    
+    if (template && template.tags) {
+        for (const [tag, value] of Object.entries(template.tags)) {
+            let finalValue = value;
+            
+            // Inject system-generated dynamic values
+            if (tag === "11") {
+                finalValue = "ORD_" + Date.now();
+            } else if (tag === "60") {
+                finalValue = generateFixTimestamp();
+            }
+            
+            addTagRow(tag, finalValue);
+        }
+    }
+}
+
+function generateFixTimestamp() {
+    const d = new Date();
+    const pad = (n, width = 2) => String(n).padStart(width, '0');
+    const date = `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`;
+    const time = `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}.${pad(d.getUTCMilliseconds(), 3)}`;
+    return `${date}-${time}`;
 }
 
 async function sendMessage() {
