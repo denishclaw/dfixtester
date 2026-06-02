@@ -90,7 +90,7 @@ async function fetchMessages() {
             `;
             
             const icon = tr.querySelector('.view-details-icon');
-            icon.onclick = (event) => showFixMessageDetails(event, msg.message);
+            icon.onclick = (event) => showFixMessageDetails(event, msg.message, msg.session);
             
             tbody.appendChild(tr);
             addedNew = true;
@@ -189,8 +189,25 @@ async function loadSessions() {
             const opt = new Option(session.sessionString, session.sessionString);
             selects.forEach(sel => sel.add(opt.cloneNode(true)));
         });
+
+        if (selects[0] && selects[0].value) {
+            updateDictionaryForSession(selects[0].value);
+        }
+        
+        selects.forEach(sel => {
+            sel.onchange = (e) => updateDictionaryForSession(e.target.value);
+        });
     } catch (err) {
         console.error('Failed to load sessions', err);
+    }
+}
+
+async function updateDictionaryForSession(sessionString) {
+    if (!sessionString) return;
+    const parts = sessionString.split(':');
+    if (parts.length > 0) {
+        await loadDictionary(parts[0]);
+        document.querySelectorAll('.fix-tag').forEach(input => updateTagLabel(input));
     }
 }
 
@@ -379,8 +396,21 @@ function handleMessageClick(rawMessage, rowElement) {
     }
 }
 
-function showFixMessageDetails(event, rawMessage) {
+async function showFixMessageDetails(event, rawMessage, sessionString) {
     event.stopPropagation(); // Prevent the row click event from firing and autofilling tags
+
+    let localDictionary = fixDictionary;
+    if (sessionString) {
+        const parts = sessionString.split(':');
+        if (parts.length > 0) {
+            try {
+                const res = await fetch(`/api/dictionary?version=${encodeURIComponent(parts[0])}`);
+                localDictionary = await res.json();
+            } catch (err) {
+                console.error("Failed to load dictionary for message", err);
+            }
+        }
+    }
 
     let popup = document.getElementById('fixDetailsPopup');
     let backdrop = document.getElementById('fixDetailsBackdrop');
@@ -446,7 +476,7 @@ function showFixMessageDetails(event, rawMessage) {
         if (parts.length === 2) {
             const tag = parts[0];
             const value = parts[1];
-            const desc = fixDictionary[tag] || '';
+            const desc = localDictionary[tag] || '';
             html += `
                 <tr>
                     <td class="fw-bold ps-3">${tag}</td>

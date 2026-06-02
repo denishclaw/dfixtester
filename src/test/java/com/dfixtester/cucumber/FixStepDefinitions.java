@@ -24,6 +24,7 @@ import quickfix.field.OrderQty;
 
 import java.time.Duration;
 import java.io.InputStream;
+import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -42,26 +43,50 @@ public class FixStepDefinitions {
     private SessionID sessionID;
     private String lastClOrdId;
 
-    private static final Map<String, Integer> tagNameToId = new HashMap<>();
+    private static final Map<String, Map<String, Integer>> dictionaries = new HashMap<>();
 
-    static {
+    private Map<String, Integer> getDictionaryForVersion(String version) {
+        if (dictionaries.containsKey(version)) {
+            return dictionaries.get(version);
+        }
+        
+        Map<String, Integer> tagNameToId = new HashMap<>();
         try {
             ObjectMapper mapper = new ObjectMapper();
-            Resource resource = new ClassPathResource("config/fix-tag-dictionary-FIX.4.2.json");
-            if (!resource.exists()) {
-                resource = new ClassPathResource("config/fix-tag-dictionary.json");
+            Map<String, String> idToName = null;
+            
+            String fileName = version.isEmpty() ? "config/fix-tag-dictionary.json" : "config/fix-tag-dictionary-" + version + ".json";
+            
+            File extFile = new File(fileName);
+            if (!extFile.exists() && !version.isEmpty()) {
+                extFile = new File("config/fix-tag-dictionary.json");
             }
-            if (resource.exists()) {
-                try (InputStream is = resource.getInputStream()) {
-                    Map<String, String> idToName = mapper.readValue(is, new TypeReference<Map<String, String>>() {});
-                    for (Map.Entry<String, String> entry : idToName.entrySet()) {
-                        tagNameToId.put(entry.getValue(), Integer.parseInt(entry.getKey()));
+            
+            if (extFile.exists()) {
+                idToName = mapper.readValue(extFile, new TypeReference<Map<String, String>>() {});
+            } else {
+                Resource resource = new ClassPathResource(fileName);
+                if (!resource.exists() && !version.isEmpty()) {
+                    resource = new ClassPathResource("config/fix-tag-dictionary.json");
+                }
+                if (resource.exists()) {
+                    try (InputStream is = resource.getInputStream()) {
+                        idToName = mapper.readValue(is, new TypeReference<Map<String, String>>() {});
                     }
+                }
+            }
+            
+            if (idToName != null) {
+                for (Map.Entry<String, String> entry : idToName.entrySet()) {
+                    tagNameToId.put(entry.getValue(), Integer.parseInt(entry.getKey()));
                 }
             }
         } catch (Exception e) {
             e.printStackTrace();
         }
+        
+        dictionaries.put(version, tagNameToId);
+        return tagNameToId;
     }
 
     @Before
@@ -92,12 +117,13 @@ public class FixStepDefinitions {
         );
         order.set(new Symbol(fields.get("Symbol")));
         
+        String version = sessionID != null ? sessionID.getBeginString() : "";
         for (Map.Entry<String, String> entry : fields.entrySet()) {
             String key = entry.getKey();
             if (key.equals("Side") || key.equals("OrdType") || key.equals("Symbol")) {
                 continue;
             }
-            int tagId = getTagId(key);
+            int tagId = getTagId(key, version);
             if (tagId != -1) {
                 order.setField(new StringField(tagId, entry.getValue()));
             } else if (key.equals("CustomBrokerTag")) {
@@ -114,6 +140,9 @@ public class FixStepDefinitions {
         lastClOrdId = UUID.randomUUID().toString();
         
         scenarioContext.registerNewOrder(alias, lastClOrdId);
+
+        SessionID targetSession = new SessionID(sessionString);
+        String version = targetSession.getBeginString();
 
         NewOrderSingle order = new NewOrderSingle(
                 new ClOrdID(lastClOrdId),
@@ -132,13 +161,13 @@ public class FixStepDefinitions {
             if (key.equals("Side") || key.equals("OrdType") || key.equals("Symbol") || key.equals("Price") || key.equals("OrderQty")) {
                 continue; // Already handled by explicit setters
             }
-            int tagId = getTagId(key);
+            int tagId = getTagId(key, version);
             if (tagId != -1) {
                 order.setField(new StringField(tagId, entry.getValue()));
             }
         }
 
-        Session.sendToTarget(order, new SessionID(sessionString));
+        Session.sendToTarget(order, targetSession);
     }
 
     @Then("I expect an ExecutionReport for alias {string} within {int} seconds")
@@ -165,6 +194,7 @@ public class FixStepDefinitions {
         String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
         Map<String, String> expectedFields = dataTable.asMap();
         SessionID expectedSession = new SessionID(sessionString);
+        String version = expectedSession.getBeginString();
 
         Awaitility.await()
             .atMost(Duration.ofSeconds(timeoutSeconds))
@@ -188,7 +218,7 @@ public class FixStepDefinitions {
                         if (msgClOrdId.equals(expectedClOrdId)) {
                             boolean allFieldsMatch = true;
                             for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
-                                int tag = getTagId(entry.getKey());
+                                int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1 && (!msg.isSetField(tag) || !msg.getString(tag).equals(entry.getValue()))) {
                                     allFieldsMatch = false;
                                     break;
@@ -204,9 +234,10 @@ public class FixStepDefinitions {
             });
     }
 
-    private int getTagId(String fieldName) {
-        if (tagNameToId.containsKey(fieldName)) {
-            return tagNameToId.get(fieldName);
+    private int getTagId(String fieldName, String version) {
+        Map<String, Integer> dict = getDictionaryForVersion(version);
+        if (dict.containsKey(fieldName)) {
+            return dict.get(fieldName);
         }
         switch (fieldName) {
             case "Side": return 54;
