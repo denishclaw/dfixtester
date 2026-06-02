@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     await loadDictionary();
     loadSessions();
     loadTemplates();
-    setupHeartbeatFilter();
     setupReplayThrottle();
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
@@ -70,13 +69,15 @@ async function fetchMessages() {
 
             const time = new Date(msg.timestamp).toLocaleTimeString();
             
-            const isHeartbeat = /(?:^|\|)35=0\|/.test(msg.message);
-            const hideHeartbeats = document.getElementById('filterHeartbeatsCheck')?.checked;
+            const isAdmin = /(?:^|\|)35=[012345A]\|/.test(msg.message);
+            const hideAdmin = document.getElementById('filterHeartbeatsCheck')?.checked;
+            const logFilterVal = document.getElementById('logSessionFilter')?.value;
 
             const tr = document.createElement('tr');
-            tr.className = rowColorClass + (isHeartbeat ? ' heartbeat-msg' : '');
+            tr.className = rowColorClass + (isAdmin ? ' admin-msg' : '');
+            tr.setAttribute('data-session', msg.session);
             tr.style.cursor = 'pointer';
-            if (isHeartbeat && hideHeartbeats) {
+            if ((isAdmin && hideAdmin) || (logFilterVal && msg.session !== logFilterVal)) {
                 tr.style.display = 'none';
             }
             tr.onclick = () => handleMessageClick(msg.message, tr);
@@ -156,6 +157,10 @@ async function loadSessions() {
         const tbody = document.querySelector('#sessionTable tbody');
         const selects = [document.getElementById('sendSessionSelect'), document.getElementById('replaySessionSelect')];
         
+        const logFilter = document.getElementById('logSessionFilter');
+        const currentLogFilterVal = logFilter ? logFilter.value : '';
+        if (logFilter) logFilter.innerHTML = '<option value="">-- All Sessions --</option>';
+
         tbody.innerHTML = '';
         selects.forEach(sel => sel.innerHTML = '');
 
@@ -188,7 +193,10 @@ async function loadSessions() {
             // Populate Dropdowns
             const opt = new Option(session.sessionString, session.sessionString);
             selects.forEach(sel => sel.add(opt.cloneNode(true)));
+            if (logFilter) logFilter.add(opt.cloneNode(true));
         });
+
+        if (logFilter && currentLogFilterVal) logFilter.value = currentLogFilterVal;
 
         if (selects[0] && selects[0].value) {
             updateDictionaryForSession(selects[0].value);

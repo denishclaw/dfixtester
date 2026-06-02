@@ -65,7 +65,19 @@
                 </div>
             </div>
             <div class="col-md-7">
-                <h4>Message Log</h4>
+            <div class="d-flex justify-content-between align-items-end mb-2">
+                <h4 class="mb-0">Message Log</h4>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearMessageLog()">Clear Log</button>
+            </div>
+            <div class="d-flex gap-3 mb-2 align-items-center">
+                <select id="logSessionFilter" class="form-select form-select-sm w-auto" onchange="filterMessageLog()">
+                    <option value="">-- All Sessions --</option>
+                </select>
+                <div class="form-check mb-0">
+                    <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="filterMessageLog()">
+                    <label class="form-check-label fw-bold" style="font-size: 0.9em;" for="filterHeartbeatsCheck">Hide Admin (35=0,1,2,3,4,5,A)</label>
+                </div>
+            </div>
                 <div id="messageLogContainer" class="table-responsive bg-light p-2 border rounded" style="max-height: 800px; overflow-y: auto;">
                     <table id="messageLogTable" class="table table-sm">
                         <thead style="position: sticky; top: 0; background-color: white; z-index: 1;">
@@ -100,6 +112,6 @@
     </div>
 </div>
 </div>
-<script src="app.js?v=2"></script>
+<script src="app.js?v=3"></script>
 </body>
 </html>
