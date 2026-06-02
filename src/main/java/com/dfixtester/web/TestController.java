@@ -3,8 +3,8 @@ package com.dfixtester.web;
 import org.springframework.boot.system.ApplicationHome;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 
-import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.PrintStream;
 import java.util.ArrayList;
@@ -47,44 +47,48 @@ public class TestController {
     }
 
     @PostMapping("/run")
-    public ResponseEntity<String> runTest(@RequestParam(required = false) String feature) {
-        ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        PrintStream out = new PrintStream(baos);
-        PrintStream oldOut = System.out;
-        PrintStream oldErr = System.err;
-
-        try {
-            // Redirect standard output to capture Cucumber's console logging
-            System.setOut(out);
-            System.setErr(out);
+    public ResponseEntity<StreamingResponseBody> runTest(@RequestParam(required = false) String feature) {
+        StreamingResponseBody stream = out -> {
+            PrintStream printStream = new PrintStream(out, true); // true for auto-flush
+            PrintStream oldOut = System.out;
+            PrintStream oldErr = System.err;
             
-            List<String> args = new ArrayList<>();
-            args.add("-g");
-            args.add("com.dfixtester.cucumber"); // Package where your Step Definitions live
-            args.add("-p");
-            args.add("pretty"); // Format output nicely
+            try {
+                // Redirect standard output to capture Cucumber's console logging live
+                System.setOut(printStream);
+                System.setErr(printStream);
+                
+                List<String> args = new ArrayList<>();
+                args.add("-g");
+                args.add("com.dfixtester.cucumber"); // Package where your Step Definitions live
+                args.add("-p");
+                args.add("pretty"); // Format output nicely
 
-            File featuresDir = getFeaturesDirectory();
-            if (feature != null && !feature.isEmpty()) {
-                String[] features = feature.split(",");
-                for (int i = 0; i < features.length; i++) {
-                    args.add(new File(featuresDir, features[i].trim()).getAbsolutePath());
+                File featuresDir = getFeaturesDirectory();
+                if (feature != null && !feature.isEmpty()) {
+                    String[] features = feature.split(",");
+                    for (int i = 0; i < features.length; i++) {
+                        args.add(new File(featuresDir, features[i].trim()).getAbsolutePath());
+                    }
+                } else {
+                    args.add(featuresDir.getAbsolutePath());
                 }
-            } else {
-                args.add(featuresDir.getAbsolutePath());
+                
+                // Run Cucumber programmatically
+                byte exitCode = io.cucumber.core.cli.Main.run(args.toArray(new String[0]), Thread.currentThread().getContextClassLoader());
+                
+                printStream.println("\n\nExit Status: " + exitCode);
+            } catch (Exception e) {
+                printStream.println("\nFailed to run tests: " + e.getMessage());
+            } finally {
+                // Always restore the original streams
+                System.setOut(oldOut);
+                System.setErr(oldErr);
             }
-            
-            // Run Cucumber programmatically
-            byte exitCode = io.cucumber.core.cli.Main.run(args.toArray(new String[0]), Thread.currentThread().getContextClassLoader());
-            
-            out.flush();
-            return ResponseEntity.ok(baos.toString() + "\n\nExit Status: " + exitCode);
-        } catch (Exception e) {
-            return ResponseEntity.status(500).body("Failed to run tests: " + e.getMessage() + "\n" + baos.toString());
-        } finally {
-            // Always restore the original streams
-            System.setOut(oldOut);
-            System.setErr(oldErr);
-        }
+        };
+        
+        return ResponseEntity.ok()
+                .header("Content-Type", "text/plain;charset=UTF-8")
+                .body(stream);
     }
 }

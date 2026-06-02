@@ -531,6 +531,8 @@ async function loadFeatureFiles() {
     const container = document.getElementById('featureCheckboxes');
     if (!container) return;
     
+    container.innerHTML = '<span class="text-muted">Loading feature files...</span>';
+
     try {
         const res = await fetch('/api/tests/features');
         if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
@@ -575,14 +577,25 @@ async function runTests() {
 
     const featureParam = selectedFeatures.length > 0 ? `?feature=${encodeURIComponent(selectedFeatures.join(','))}` : '';
     
-    pre.innerText = "Running tests... Please wait.";
+    pre.textContent = "Running tests... Please wait.\n";
     
     try {
         const res = await fetch(`/api/tests/run${featureParam}`, { method: 'POST' });
-        const output = await res.text();
-        pre.innerText = output;
+        if (!res.ok) throw new Error("Request failed: " + res.statusText);
+        
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        pre.textContent = ""; // Clear waiting message once stream starts
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            
+            pre.textContent += decoder.decode(value, { stream: true });
+            pre.scrollTop = pre.scrollHeight; // Auto-scroll to bottom
+        }
     } catch (e) {
-        pre.innerText = "Error triggering tests: " + e;
+        pre.textContent += "\nError triggering tests: " + e;
     }
 }
 

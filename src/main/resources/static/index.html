@@ -93,9 +93,10 @@
             </div>
             <button class="btn btn-sm btn-outline-secondary" onclick="selectAllFeatures()">Select All</button>
             <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllFeatures()">Deselect All</button>
+            <button class="btn btn-sm btn-outline-primary ms-2" onclick="loadFeatureFiles()">Refresh List</button>
         </div>
         <button class="btn btn-success mb-3" onclick="runTests()">Execute Selected Tests</button>
-        <pre id="testOutput" class="bg-dark text-light p-3 rounded" style="min-height: 200px;">Awaiting execution...</pre>
+        <pre id="testOutput" class="bg-dark text-light p-3 rounded" style="min-height: 200px; max-height: 500px; overflow-y: auto;">Awaiting execution...</pre>
     </div>
 </div>
 </div>
