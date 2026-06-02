@@ -55,19 +55,27 @@ public class FixStepDefinitions {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, String> idToName = null;
             
-            String fileName = version.isEmpty() ? "config/fix-tag-dictionary.json" : "config/fix-tag-dictionary-" + version + ".json";
+            String baseName = version.isEmpty() ? "fix-tag-dictionary.json" : "fix-tag-dictionary-" + version + ".json";
             
-            File extFile = new File(fileName);
+            File extFile = new File("config/" + baseName);
+            if (!extFile.exists()) {
+                extFile = new File(baseName);
+            }
+            
             if (!extFile.exists() && !version.isEmpty()) {
                 extFile = new File("config/fix-tag-dictionary.json");
+                if (!extFile.exists()) extFile = new File("fix-tag-dictionary.json");
             }
             
             if (extFile.exists()) {
                 idToName = mapper.readValue(extFile, new TypeReference<Map<String, String>>() {});
             } else {
-                Resource resource = new ClassPathResource(fileName);
+                Resource resource = new ClassPathResource("config/" + baseName);
+                if (!resource.exists()) resource = new ClassPathResource(baseName);
+                
                 if (!resource.exists() && !version.isEmpty()) {
                     resource = new ClassPathResource("config/fix-tag-dictionary.json");
+                    if (!resource.exists()) resource = new ClassPathResource("fix-tag-dictionary.json");
                 }
                 if (resource.exists()) {
                     try (InputStream is = resource.getInputStream()) {

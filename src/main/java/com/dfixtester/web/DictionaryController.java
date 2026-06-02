@@ -23,12 +23,25 @@ public class DictionaryController {
 
     @GetMapping
     public ResponseEntity<Map<String, String>> getDictionary(@RequestParam(required = false, defaultValue = "") String version) {
-        String fileName = version.isEmpty() ? "config/fix-tag-dictionary.json" : "config/fix-tag-dictionary-" + version + ".json";
-        Map<String, String> dictionary = tryLoadDictionary(fileName);
+        String baseName = version.isEmpty() ? "fix-tag-dictionary.json" : "fix-tag-dictionary-" + version + ".json";
+        
+        Map<String, String> dictionary = tryLoadDictionary("config/" + baseName);
+        if (dictionary.isEmpty()) {
+            dictionary = tryLoadDictionary(baseName);
+        }
         
         if (dictionary.isEmpty() && !version.isEmpty()) {
             // Fallback to default dictionary if version-specific file is missing
             dictionary = tryLoadDictionary("config/fix-tag-dictionary.json");
+            if (dictionary.isEmpty()) {
+                dictionary = tryLoadDictionary("fix-tag-dictionary.json");
+            }
+        } else if (dictionary.isEmpty() && version.isEmpty()) {
+            // Fallback to FIX.4.2 if no version was specified by the UI
+            dictionary = tryLoadDictionary("config/fix-tag-dictionary-FIX.4.2.json");
+            if (dictionary.isEmpty()) {
+                dictionary = tryLoadDictionary("fix-tag-dictionary-FIX.4.2.json");
+            }
         }
         
         return ResponseEntity.ok(dictionary);
