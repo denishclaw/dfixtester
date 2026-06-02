@@ -3,9 +3,9 @@ package com.dfixtester.web;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.InputStreamReader;
+import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -30,35 +30,42 @@ public class TestController {
 
     @PostMapping("/run")
     public ResponseEntity<String> runTest(@RequestParam(required = false) String feature) {
-        StringBuilder output = new StringBuilder();
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        PrintStream out = new PrintStream(baos);
+        PrintStream oldOut = System.out;
+        PrintStream oldErr = System.err;
+
         try {
-            // Base command to run tests, overriding the default skipTests property in pom.xml
-            String cmd = "mvn test -DskipTests=false";
+            // Redirect standard output to capture Cucumber's console logging
+            System.setOut(out);
+            System.setErr(out);
             
-            // Point cucumber to the external 'features/' directory next to the JAR
+            List<String> args = new ArrayList<>();
+            args.add("-g");
+            args.add("com.dfixtester.cucumber"); // Package where your Step Definitions live
+            args.add("-p");
+            args.add("pretty"); // Format output nicely
+
             if (feature != null && !feature.isEmpty()) {
                 String[] features = feature.split(",");
-                StringBuilder featuresArg = new StringBuilder();
                 for (int i = 0; i < features.length; i++) {
-                    if (i > 0) featuresArg.append(",");
-                    featuresArg.append("features/").append(features[i].trim());
+                    args.add("features/" + features[i].trim());
                 }
-                cmd += " -Dcucumber.features=\"" + featuresArg.toString() + "\"";
             } else {
-                cmd += " -Dcucumber.features=\"features/\"";
+                args.add("features/");
             }
             
-            Process process = Runtime.getRuntime().exec(cmd);
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            // Run Cucumber programmatically
+            byte exitCode = io.cucumber.core.cli.Main.run(args.toArray(new String[0]), Thread.currentThread().getContextClassLoader());
             
-            String line;
-            while ((line = reader.readLine()) != null) {
-                output.append(line).append("\n");
-            }
-            
-            return ResponseEntity.ok(output.toString());
+            out.flush();
+            return ResponseEntity.ok(baos.toString() + "\n\nExit Status: " + exitCode);
         } catch (Exception e) {
-            return ResponseEntity.status(500).body("Failed to run tests: " + e.getMessage() + "\n" + output.toString());
+            return ResponseEntity.status(500).body("Failed to run tests: " + e.getMessage() + "\n" + baos.toString());
+        } finally {
+            // Always restore the original streams
+            System.setOut(oldOut);
+            System.setErr(oldErr);
         }
     }
 }
