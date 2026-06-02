@@ -528,11 +528,13 @@ async function replayMessages() {
 }
 
 async function loadFeatureFiles() {
+    const container = document.getElementById('featureCheckboxes');
+    if (!container) return;
+    
     try {
         const res = await fetch('/api/tests/features');
+        if (!res.ok) throw new Error(`HTTP Error: ${res.status}`);
         const features = await res.json();
-        const container = document.getElementById('featureCheckboxes');
-        if (!container) return;
         
         container.innerHTML = '';
         if (features.length === 0) {
@@ -551,6 +553,7 @@ async function loadFeatureFiles() {
         });
     } catch (err) {
         console.error('Failed to load features', err);
+        container.innerHTML = `<span class="text-danger">Error loading feature files. Check console (${err.message})</span>`;
     }
 }
 

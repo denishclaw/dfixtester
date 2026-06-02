@@ -16,7 +16,19 @@ public class TestController {
 
     private File getFeaturesDirectory() {
         ApplicationHome home = new ApplicationHome(TestController.class);
-        return new File(home.getDir(), "features");
+        File dir = home.getDir();
+        
+        File featuresDir = dir != null ? new File(dir, "features") : new File("features");
+        
+        // If running from an IDE (where dir might be target/classes), fallback to the project root
+        if (!featuresDir.exists()) {
+            File fallbackDir = new File("features");
+            if (fallbackDir.exists() && fallbackDir.isDirectory()) {
+                return fallbackDir;
+            }
+        }
+        
+        return featuresDir;
     }
 
     @GetMapping("/features")
