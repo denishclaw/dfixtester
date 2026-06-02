@@ -188,7 +188,8 @@ public class FixStepDefinitions {
             .atMost(Duration.ofSeconds(timeoutSeconds))
             .pollInterval(Duration.ofMillis(200))
             .until(() -> {
-                for (Message msg : scenarioContext.getMessageQueue()) {
+                for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                    Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
                         if (msg.getString(ClOrdID.FIELD).equals(expectedClOrdId)) {
                             return true;
@@ -203,7 +204,6 @@ public class FixStepDefinitions {
     public void i_expect_a_message_on_session_with_fields(String msgType, String sessionString, String alias, int timeoutSeconds, DataTable dataTable) {
         String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
         Map<String, String> expectedFields = dataTable.asMap();
-        SessionID expectedSession = new SessionID(sessionString);
         String version = expectedSession.getBeginString();
 
         try {
@@ -211,15 +211,13 @@ public class FixStepDefinitions {
                 .atMost(Duration.ofSeconds(timeoutSeconds))
                 .pollInterval(Duration.ofMillis(200))
                 .until(() -> {
-                    for (Message msg : scenarioContext.getMessageQueue()) {
+                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                        Message msg = event.message;
                         try {
                             if (!msg.getHeader().getString(35).equals(msgType)) continue;
 
-                            // Ensure this message arrived ON the correct session (matching TargetCompID/SenderCompID)
-                            String msgSender = msg.getHeader().getString(49);
-                            String msgTarget = msg.getHeader().getString(56);
-                            if (!expectedSession.getSenderCompID().equals(msgTarget) || 
-                                !expectedSession.getTargetCompID().equals(msgSender)) {
+                            // Ensure this message arrived ON the correct exact session requested
+                            if (!event.sessionID.toString().equals(sessionString)) {
                                 continue;
                             }
 

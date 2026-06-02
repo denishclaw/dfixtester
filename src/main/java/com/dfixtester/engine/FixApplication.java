@@ -73,12 +73,13 @@ public class FixApplication extends MessageCracker implements Application {
     @Override
     public void toApp(Message message, SessionID sessionID) throws DoNotSend {
         logMessage(message, sessionID, "OUT");
+        scenarioContext.addMessageEvent(sessionID, ScenarioContext.Direction.OUT, message);
     }
 
     @Override
     public void fromApp(Message message, SessionID sessionID) throws FieldNotFound, IncorrectDataFormat, IncorrectTagValue, UnsupportedMessageType {
         logMessage(message, sessionID, "IN");
-        scenarioContext.addReceivedMessage(message);
+        scenarioContext.addMessageEvent(sessionID, ScenarioContext.Direction.IN, message);
 
         if (message.getHeader().getString(35).equals("8")) {
             if (message.isSetField(ClOrdID.FIELD) && message.isSetField(OrderID.FIELD)) {
