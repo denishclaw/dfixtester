@@ -86,7 +86,15 @@
     <!-- Run Tests Tab -->
     <div id="test-tab" class="tab-pane" style="display: none;">
         <h4>Run Cucumber Tests</h4>
-        <button class="btn btn-success mb-3" onclick="runTests()">Execute Tests</button>
+        <div class="mb-3" style="max-width: 600px;">
+            <label class="form-label fw-bold">Select Features to Run (from 'features/' directory):</label>
+            <div id="featureCheckboxes" class="border rounded p-2 bg-light mb-2" style="max-height: 200px; overflow-y: auto;">
+                <span class="text-muted">Loading feature files...</span>
+            </div>
+            <button class="btn btn-sm btn-outline-secondary" onclick="selectAllFeatures()">Select All</button>
+            <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllFeatures()">Deselect All</button>
+        </div>
+        <button class="btn btn-success mb-3" onclick="runTests()">Execute Selected Tests</button>
         <pre id="testOutput" class="bg-dark text-light p-3 rounded" style="min-height: 200px;">Awaiting execution...</pre>
     </div>
 </div>

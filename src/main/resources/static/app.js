@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setupReplayThrottle();
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
+    loadFeatureFiles();
 });
 
 let activeSessions = [];
@@ -27,9 +28,10 @@ const sessionColors = [
 
 let fixDictionary = {};
 
-async function loadDictionary() {
+async function loadDictionary(version = '') {
     try {
-        const res = await fetch('/api/dictionary');
+        const url = version ? `/api/dictionary?version=${encodeURIComponent(version)}` : '/api/dictionary';
+        const res = await fetch(url);
         fixDictionary = await res.json();
     } catch (err) {
         console.error('Failed to load dictionary', err);
@@ -495,12 +497,55 @@ async function replayMessages() {
     else alert("Replay failed: " + await res.text());
 }
 
+async function loadFeatureFiles() {
+    try {
+        const res = await fetch('/api/tests/features');
+        const features = await res.json();
+        const container = document.getElementById('featureCheckboxes');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        if (features.length === 0) {
+            container.innerHTML = '<span class="text-muted">No .feature files found in the "features/" directory alongside the binary.</span>';
+            return;
+        }
+        
+        features.forEach(feature => {
+            const div = document.createElement('div');
+            div.className = 'form-check';
+            div.innerHTML = `
+                <input class="form-check-input feature-checkbox" type="checkbox" value="${feature}" id="chk_${feature.replace(/[^a-zA-Z0-9]/g, '_')}">
+                <label class="form-check-label" for="chk_${feature.replace(/[^a-zA-Z0-9]/g, '_')}">${feature}</label>
+            `;
+            container.appendChild(div);
+        });
+    } catch (err) {
+        console.error('Failed to load features', err);
+    }
+}
+
+function selectAllFeatures() {
+    document.querySelectorAll('.feature-checkbox').forEach(cb => cb.checked = true);
+}
+
+function deselectAllFeatures() {
+    document.querySelectorAll('.feature-checkbox').forEach(cb => cb.checked = false);
+}
+
 async function runTests() {
     const pre = document.getElementById('testOutput');
+    const selectedFeatures = Array.from(document.querySelectorAll('.feature-checkbox:checked')).map(cb => cb.value);
+    
+    if (document.querySelectorAll('.feature-checkbox').length > 0 && selectedFeatures.length === 0) {
+        return alert("Please select at least one feature file to run.");
+    }
+
+    const featureParam = selectedFeatures.length > 0 ? `?feature=${encodeURIComponent(selectedFeatures.join(','))}` : '';
+    
     pre.innerText = "Running tests... Please wait.";
     
     try {
-        const res = await fetch(`/api/tests/run`, { method: 'POST' });
+        const res = await fetch(`/api/tests/run${featureParam}`, { method: 'POST' });
         const output = await res.text();
         pre.innerText = output;
     } catch (e) {
