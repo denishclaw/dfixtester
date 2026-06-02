@@ -204,6 +204,7 @@ public class FixStepDefinitions {
     public void i_expect_a_message_on_session_with_fields(String msgType, String sessionString, String alias, int timeoutSeconds, DataTable dataTable) {
         String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
         Map<String, String> expectedFields = dataTable.asMap();
+        SessionID expectedSession = new SessionID(sessionString);
         String version = expectedSession.getBeginString();
 
         try {
