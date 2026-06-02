@@ -63,11 +63,13 @@ public class FixApplication extends MessageCracker implements Application {
     @Override
     public void toAdmin(Message message, SessionID sessionID) {
         logMessage(message, sessionID, "OUT");
+        scenarioContext.addMessageEvent(sessionID, ScenarioContext.Direction.OUT, message);
     }
 
     @Override
     public void fromAdmin(Message message, SessionID sessionID) throws FieldNotFound, IncorrectDataFormat, IncorrectTagValue, RejectLogon {
         logMessage(message, sessionID, "IN");
+        scenarioContext.addMessageEvent(sessionID, ScenarioContext.Direction.IN, message);
     }
 
     @Override

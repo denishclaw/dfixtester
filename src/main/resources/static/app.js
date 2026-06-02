@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
     startMessagePolling();
     loadFeatureFiles();
+    startSystemLogPolling();
 });
 
 let activeSessions = [];
@@ -605,6 +606,47 @@ async function runTests() {
     } catch (e) {
         pre.textContent += "\nError triggering tests: " + e;
     }
+}
+
+let lastSystemLogId = 0;
+let systemLogInterval;
+
+function startSystemLogPolling() {
+    if (systemLogInterval) clearInterval(systemLogInterval);
+    systemLogInterval = setInterval(fetchSystemLogs, 2000);
+}
+
+async function fetchSystemLogs() {
+    try {
+        const logTab = document.getElementById('system-log-tab');
+        if (!logTab || logTab.style.display === 'none') return;
+
+        const res = await fetch('/api/logs?since=' + lastSystemLogId);
+        const logs = await res.json();
+        
+        if (logs.length === 0) return;
+        
+        const pre = document.getElementById('systemLogOutput');
+        let addedNew = false;
+        
+        logs.forEach(log => {
+            if (log.id > lastSystemLogId) {
+                lastSystemLogId = log.id;
+            }
+            pre.textContent += log.message + "\n";
+            addedNew = true;
+        });
+        
+        if (addedNew) pre.scrollTop = pre.scrollHeight;
+    } catch (e) {
+        console.error("Failed to fetch system logs", e);
+    }
+}
+
+async function clearSystemLogs() {
+    await fetch('/api/logs/clear', { method: 'POST' });
+    document.getElementById('systemLogOutput').textContent = '';
+    lastSystemLogId = 0;
 }
 
 // Helper function to handle tab switching
