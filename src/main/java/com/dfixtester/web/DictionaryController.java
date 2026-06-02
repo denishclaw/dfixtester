@@ -2,6 +2,7 @@ package com.dfixtester.web;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -49,7 +50,8 @@ public class DictionaryController {
 
     private Map<String, String> tryLoadDictionary(String path) {
         try {
-            File extFile = new File(path);
+            ApplicationHome home = new ApplicationHome(DictionaryController.class);
+            File extFile = new File(home.getDir(), path);
             if (extFile.exists()) {
                 return objectMapper.readValue(extFile, new TypeReference<Map<String, String>>() {});
             }

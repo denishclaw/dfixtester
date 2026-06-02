@@ -1,5 +1,6 @@
 package com.dfixtester.web;
 
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -13,10 +14,15 @@ import java.util.List;
 @RequestMapping("/api/tests")
 public class TestController {
 
+    private File getFeaturesDirectory() {
+        ApplicationHome home = new ApplicationHome(TestController.class);
+        return new File(home.getDir(), "features");
+    }
+
     @GetMapping("/features")
     public ResponseEntity<List<String>> getFeatures() {
         List<String> featureFiles = new ArrayList<>();
-        File featuresDir = new File("features"); // Expects a 'features' folder in the same directory as the jar
+        File featuresDir = getFeaturesDirectory();
         if (featuresDir.exists() && featuresDir.isDirectory()) {
             File[] files = featuresDir.listFiles((dir, name) -> name.endsWith(".feature"));
             if (files != null) {
@@ -46,13 +52,14 @@ public class TestController {
             args.add("-p");
             args.add("pretty"); // Format output nicely
 
+            File featuresDir = getFeaturesDirectory();
             if (feature != null && !feature.isEmpty()) {
                 String[] features = feature.split(",");
                 for (int i = 0; i < features.length; i++) {
-                    args.add("features/" + features[i].trim());
+                    args.add(new File(featuresDir, features[i].trim()).getAbsolutePath());
                 }
             } else {
-                args.add("features/");
+                args.add(featuresDir.getAbsolutePath());
             }
             
             // Run Cucumber programmatically

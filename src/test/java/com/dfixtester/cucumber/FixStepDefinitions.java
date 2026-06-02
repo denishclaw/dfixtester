@@ -6,6 +6,7 @@ import io.cucumber.java.en.Given;
 import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import org.awaitility.Awaitility;
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import io.cucumber.spring.CucumberContextConfiguration;
@@ -55,16 +56,19 @@ public class FixStepDefinitions {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, String> idToName = null;
             
+            ApplicationHome home = new ApplicationHome(FixStepDefinitions.class);
+            File baseDir = home.getDir();
+
             String baseName = version.isEmpty() ? "fix-tag-dictionary.json" : "fix-tag-dictionary-" + version + ".json";
             
-            File extFile = new File("config/" + baseName);
+            File extFile = new File(baseDir, "config/" + baseName);
             if (!extFile.exists()) {
-                extFile = new File(baseName);
+                extFile = new File(baseDir, baseName);
             }
             
             if (!extFile.exists() && !version.isEmpty()) {
-                extFile = new File("config/fix-tag-dictionary.json");
-                if (!extFile.exists()) extFile = new File("fix-tag-dictionary.json");
+                extFile = new File(baseDir, "config/fix-tag-dictionary.json");
+                if (!extFile.exists()) extFile = new File(baseDir, "fix-tag-dictionary.json");
             }
             
             if (extFile.exists()) {
