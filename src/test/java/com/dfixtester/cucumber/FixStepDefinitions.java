@@ -217,7 +217,7 @@ public class FixStepDefinitions {
                         try {
                             if (!msg.getHeader().getString(35).equals(msgType)) continue;
 
-                            // Ensure this message arrived ON the correct exact session requested
+                            // Ensure this message arrived ON the correct session
                             if (!event.sessionID.toString().equals(sessionString)) {
                                 continue;
                             }
@@ -237,9 +237,8 @@ public class FixStepDefinitions {
                                 if (allFieldsMatch) return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
-                            // This is an expected part of validation as we check different messages, ignore.
+                            // Ignore field not found during validation loop
                         } catch (Exception e) {
-                            // Any other exception is a potential bug in the test logic.
                             System.err.println("Unexpected error during message validation: " + e.getMessage());
                         }
                     }

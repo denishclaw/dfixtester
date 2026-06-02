@@ -188,7 +188,8 @@ public class FixStepDefinitions {
             .atMost(Duration.ofSeconds(timeoutSeconds))
             .pollInterval(Duration.ofMillis(200))
             .until(() -> {
-                for (Message msg : scenarioContext.getMessageQueue()) {
+                for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                    Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
                         if (msg.getString(ClOrdID.FIELD).equals(expectedClOrdId)) {
                             return true;
@@ -206,42 +207,49 @@ public class FixStepDefinitions {
         SessionID expectedSession = new SessionID(sessionString);
         String version = expectedSession.getBeginString();
 
-        Awaitility.await()
-            .atMost(Duration.ofSeconds(timeoutSeconds))
-            .pollInterval(Duration.ofMillis(200))
-            .until(() -> {
-                for (Message msg : scenarioContext.getMessageQueue()) {
-                    try {
-                        if (!msg.getHeader().getString(35).equals(msgType)) continue;
+        try {
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(timeoutSeconds))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> {
+                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                        Message msg = event.message;
+                        try {
+                            if (!msg.getHeader().getString(35).equals(msgType)) continue;
 
-                        // Ensure this message arrived ON the correct session (matching TargetCompID/SenderCompID)
-                        String msgSender = msg.getHeader().getString(49);
-                        String msgTarget = msg.getHeader().getString(56);
-                        if (!expectedSession.getSenderCompID().equals(msgTarget) || 
-                            !expectedSession.getTargetCompID().equals(msgSender)) {
-                            continue;
-                        }
-
-                        // Verify it is tied to our specific order alias via Tag 11 (ClOrdID) or 41 (OrigClOrdID)
-                        String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
-                        
-                        if (msgClOrdId.equals(expectedClOrdId)) {
-                            boolean allFieldsMatch = true;
-                            for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
-                                int tag = getTagId(entry.getKey(), version);
-                                if (tag != -1 && (!msg.isSetField(tag) || !msg.getString(tag).equals(entry.getValue()))) {
-                                    allFieldsMatch = false;
-                                    break;
-                                }
+                            // Ensure this message arrived ON the correct session
+                            if (!event.sessionID.toString().equals(sessionString)) {
+                                continue;
                             }
-                            if (allFieldsMatch) return true;
+
+                            // Verify it is tied to our specific order alias via Tag 11 (ClOrdID) or 41 (OrigClOrdID)
+                            String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
+                            
+                            if (msgClOrdId.equals(expectedClOrdId)) {
+                                boolean allFieldsMatch = true;
+                                for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
+                                    int tag = getTagId(entry.getKey(), version);
+                                    if (tag != -1 && (!msg.isSetField(tag) || !msg.getString(tag).equals(entry.getValue()))) {
+                                        allFieldsMatch = false;
+                                        break;
+                                    }
+                                }
+                                if (allFieldsMatch) return true;
+                            }
+                        } catch (quickfix.FieldNotFound fnf) {
+                            // Ignore field not found during validation loop
+                        } catch (Exception e) {
+                            System.err.println("Unexpected error during message validation: " + e.getMessage());
                         }
-                    } catch (Exception e) {
-                        // Ignore field not found during validation loop
                     }
-                }
-                return false;
-            });
+                    return false;
+                });
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID: " + expectedClOrdId + ") not found on session " + sessionString + ". " +
+                              "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
+                              "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
+            throw new AssertionError(errorMsg, e);
+        }
     }
 
     private int getTagId(String fieldName, String version) {
