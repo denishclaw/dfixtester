@@ -18,8 +18,16 @@ public class FixApplication extends MessageCracker implements Application {
     private final List<Map<String, Object>> messageLog = new CopyOnWriteArrayList<>();
     private long messageIdCounter = 0;
 
+    // Static reference so embedded Cucumber tests can access the active context
+    private static ScenarioContext activeScenarioContext;
+
     public FixApplication(ScenarioContext scenarioContext) {
         this.scenarioContext = scenarioContext;
+        activeScenarioContext = scenarioContext;
+    }
+
+    public static ScenarioContext getActiveScenarioContext() {
+        return activeScenarioContext;
     }
 
     public List<Map<String, Object>> getMessageLog() {

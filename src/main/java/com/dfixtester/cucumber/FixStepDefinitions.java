@@ -7,12 +7,9 @@ import io.cucumber.java.en.Then;
 import io.cucumber.java.en.When;
 import org.awaitility.Awaitility;
 import org.springframework.boot.system.ApplicationHome;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import io.cucumber.spring.CucumberContextConfiguration;
 
 import com.dfixtester.engine.ScenarioContext;
-import com.dfixtester.DFixTesterApplication;
+import com.dfixtester.engine.FixApplication;
 
 import quickfix.Message;
 import quickfix.Session;
@@ -34,15 +31,16 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 
-@CucumberContextConfiguration
-@SpringBootTest(classes = DFixTesterApplication.class, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class FixStepDefinitions {
 
-    @Autowired
     private ScenarioContext scenarioContext;
     
     private SessionID sessionID;
     private String lastClOrdId;
+
+    public FixStepDefinitions() {
+        this.scenarioContext = FixApplication.getActiveScenarioContext();
+    }
 
     private static final Map<String, Map<String, Integer>> dictionaries = new HashMap<>();
 
