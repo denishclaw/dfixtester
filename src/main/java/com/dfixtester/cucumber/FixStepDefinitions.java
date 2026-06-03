@@ -388,6 +388,89 @@ public class FixStepDefinitions {
         }
     }
 
+    @Then("I expect an admin message with MsgType {string} on session {string} within {int} seconds with fields:")
+    public void i_expect_an_admin_message_on_session_with_fields(String msgType, String sessionString, int timeoutSeconds, DataTable dataTable) {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
+        Map<String, String> expectedFields = dataTable.asMap();
+        SessionID expectedSession = new SessionID(resolvedSession);
+        String version = expectedSession.getBeginString();
+        
+        java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
+        java.util.List<String> rejectionReasons = new java.util.ArrayList<>();
+
+        try {
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(timeoutSeconds))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> {
+                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                        Message msg = event.message;
+                        try {
+                            if (!msg.getHeader().getString(35).equals(msgType)) continue;
+
+                            if (!event.sessionID.toString().equals(resolvedSession)) {
+                                continue;
+                            }
+                            
+                            String rawMsg = msg.toString();
+                            boolean isNewMessage = debuggedMessages.add(rawMsg);
+                            if (isNewMessage) {
+                                System.out.println("\n[DEBUG] Found candidate admin message on " + resolvedSession + " with MsgType " + msgType);
+                            }
+
+                            boolean allFieldsMatch = true;
+                            for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
+                                int tag = getTagId(entry.getKey(), version);
+                                if (tag != -1) {
+                                    if (!msg.isSetField(tag)) {
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
+                                        allFieldsMatch = false;
+                                        break;
+                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
+                                        allFieldsMatch = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (allFieldsMatch) {
+                                if (isNewMessage) System.out.println("   -> MATCHED! Admin message successfully validated.");
+                                
+                                java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35));
+                                for (String key : expectedFields.keySet()) {
+                                    int tag = getTagId(key, version);
+                                    if (tag != -1) validated.add(tag);
+                                }
+                                reportMessage("IN", resolvedSession, msg, validated);
+                                return true;
+                            }
+                        } catch (quickfix.FieldNotFound fnf) {
+                            // Ignore
+                        } catch (Exception e) {
+                            System.err.println("Unexpected error during message validation: " + e.getMessage());
+                        }
+                    }
+                    return false;
+                });
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            StringBuilder errorMsg = new StringBuilder("Timeout after " + timeoutSeconds + "s. Expected admin message not found on session " + resolvedSession + ".\n");
+            if (!rejectionReasons.isEmpty()) {
+                errorMsg.append("Candidate messages were rejected due to:\n - ").append(String.join("\n - ", rejectionReasons)).append("\n");
+            }
+            errorMsg.append("Total messages in queue: ").append(scenarioContext.getMessageQueue().size()).append(".\n")
+                    .append("Queue contents: ").append(scenarioContext.getMessageQueue().toString().replace("\u0001", "|"));
+            throw new AssertionError(errorMsg.toString(), e);
+        }
+    }
+
     private int getTagId(String fieldName, String version) {
         Map<String, Integer> dict = getDictionaryForVersion(version);
         if (dict.containsKey(fieldName)) {
