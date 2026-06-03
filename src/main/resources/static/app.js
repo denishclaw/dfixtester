@@ -816,7 +816,7 @@ async function buildMessageTables(msgs) {
                 `;
             }
         });
-        html += \`</tbody></table>\`;
+        html += `</tbody></table>`;
     }
     return html;
 }
