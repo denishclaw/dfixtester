@@ -56,6 +56,15 @@
                     <div id="tagRows"></div>
                     <button class="btn btn-secondary mb-3" onclick="addTagRow()">+ Add Tag</button>
                     <button class="btn btn-primary mb-3" onclick="sendMessage()">Send Message</button>
+                    
+                    <div class="mt-2 mb-4 p-3 border rounded bg-light">
+                        <h6 class="mb-3 text-muted">Export Current Message:</h6>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToCucumber()">To Cucumber</button>
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToMultiMessage()">To Multi-Message</button>
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToTemplate()">To Template</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -78,7 +87,7 @@
                 </select>
                 <div class="form-check mb-0">
                     <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="filterMessageLog()">
-                    <label class="form-check-label fw-bold" style="font-size: 0.9em;" for="filterHeartbeatsCheck">Hide Admin (35=0,1,2,3,4,5,A)</label>
+                    <label class="form-check-label fw-bold" style="font-size: 0.9em;" for="filterHeartbeatsCheck">Hide Heartbeats (35=0)</label>
                 </div>
             </div>
                 <div id="messageLogContainer" class="table-responsive bg-light p-2 border rounded" style="max-height: 800px; overflow-y: auto;">
@@ -124,6 +133,23 @@
     </div>
 </div>
 </div>
-<script src="app.js?v=4"></script>
+
+<!-- Export Popup -->
+<div id="exportBackdrop" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: rgba(0,0,0,0.5); z-index: 1040;" onclick="closeExportPopup()"></div>
+<div id="exportPopup" class="card shadow" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background-color: white; z-index: 1050; width: 90vw; max-width: 600px;">
+    <div class="card-header d-flex justify-content-between align-items-center bg-light">
+        <h5 class="m-0" id="exportTitle">Export</h5>
+        <button type="button" class="btn-close" onclick="closeExportPopup()"></button>
+    </div>
+    <div class="card-body">
+        <pre id="exportContent" class="bg-dark text-light p-3 rounded" style="max-height: 50vh; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word; font-family: monospace; font-size: 0.9em;"></pre>
+    </div>
+    <div class="card-footer text-end">
+        <button class="btn btn-primary" onclick="copyExportContent()">Copy to Clipboard</button>
+        <button class="btn btn-secondary" onclick="closeExportPopup()">Close</button>
+    </div>
+</div>
+
+<script src="app.js?v=7"></script>
 </body>
 </html>

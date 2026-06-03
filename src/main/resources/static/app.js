@@ -70,15 +70,15 @@ async function fetchMessages() {
 
             const time = new Date(msg.timestamp).toLocaleTimeString();
             
-            const isAdmin = /(?:^|\|)35=[012345A]\|/.test(msg.message);
-            const hideAdmin = document.getElementById('filterHeartbeatsCheck')?.checked;
+            const isHeartbeat = /(?:^|\|)35=0\|/.test(msg.message);
+            const hideHeartbeat = document.getElementById('filterHeartbeatsCheck')?.checked;
             const logFilterVal = document.getElementById('logSessionFilter')?.value;
 
             const tr = document.createElement('tr');
-            tr.className = rowColorClass + (isAdmin ? ' admin-msg' : '');
+            tr.className = rowColorClass + (isHeartbeat ? ' heartbeat-msg' : '');
             tr.setAttribute('data-session', msg.session);
             tr.style.cursor = 'pointer';
-            if ((isAdmin && hideAdmin) || (logFilterVal && msg.session !== logFilterVal)) {
+            if ((isHeartbeat && hideHeartbeat) || (logFilterVal && msg.session !== logFilterVal)) {
                 tr.style.display = 'none';
             }
             tr.onclick = () => handleMessageClick(msg.message, tr);
@@ -108,19 +108,26 @@ async function fetchMessages() {
     }
 }
 
-function setupHeartbeatFilter() {
-    const container = document.getElementById('messageLogContainer');
-    if (container && container.parentNode) {
-        const filterDiv = document.createElement('div');
-        filterDiv.className = 'form-check mb-2';
-        filterDiv.innerHTML = `
-            <input class="form-check-input" type="checkbox" id="filterHeartbeatsCheck" onchange="toggleHeartbeats()">
-            <label class="form-check-label fw-bold" for="filterHeartbeatsCheck">
-                Hide Heartbeat Messages (35=0)
-            </label>
-        `;
-        container.parentNode.insertBefore(filterDiv, container);
-    }
+function clearMessageLog() {
+    const tbody = document.querySelector('#messageLogTable tbody');
+    if (tbody) tbody.innerHTML = '';
+}
+
+function filterMessageLog() {
+    const selectedSession = document.getElementById('logSessionFilter')?.value;
+    const hideHeartbeat = document.getElementById('filterHeartbeatsCheck')?.checked;
+    const rows = document.querySelectorAll('#messageLogTable tbody tr');
+    
+    rows.forEach(row => {
+        const isHeartbeat = row.classList.contains('heartbeat-msg');
+        const session = row.getAttribute('data-session');
+        
+        let show = true;
+        if (selectedSession && session !== selectedSession) show = false;
+        if (hideHeartbeat && isHeartbeat) show = false;
+        
+        row.style.display = show ? '' : 'none';
+    });
 }
 
 function setupReplayThrottle() {
@@ -140,14 +147,6 @@ function setupReplayThrottle() {
         `;
         replayJson.parentNode.insertBefore(throttleDiv, replayJson);
     }
-}
-
-function toggleHeartbeats() {
-    const hide = document.getElementById('filterHeartbeatsCheck').checked;
-    const rows = document.querySelectorAll('#messageLogTable tbody tr.heartbeat-msg');
-    rows.forEach(row => {
-        row.style.display = hide ? 'none' : '';
-    });
 }
 
 async function loadSessions() {
@@ -667,5 +666,72 @@ function showTab(tabId, element) {
     }
     if (element) {
         element.classList.add('active');
+    }
+}
+
+function getCurrentMessageTags() {
+    const tagMap = {};
+    document.querySelectorAll('.tag-row').forEach(row => {
+        const tagInput = row.querySelector('.fix-tag');
+        const valInput = row.querySelector('.fix-val');
+        if (tagInput && valInput) {
+            const tag = tagInput.value.trim();
+            const val = valInput.value.trim();
+            if (tag) tagMap[tag] = val;
+        }
+    });
+    return tagMap;
+}
+
+function exportToCucumber() {
+    const tags = getCurrentMessageTags();
+    if (Object.keys(tags).length === 0) return alert("No tags to export.");
+    
+    let str = "";
+    for (const [tag, val] of Object.entries(tags)) {
+        // Translate tag number to readable Dictionary name if possible
+        const key = fixDictionary[tag] ? fixDictionary[tag] : tag;
+        str += `      | ${key.padEnd(20)} | ${val} |\n`;
+    }
+    showExportPopup("Cucumber Feature Format", str.trimEnd());
+}
+
+function exportToMultiMessage() {
+    const tags = getCurrentMessageTags();
+    if (Object.keys(tags).length === 0) return alert("No tags to export.");
+    
+    showExportPopup("Multiple Messages JSON Format", JSON.stringify([tags], null, 2));
+}
+
+function exportToTemplate() {
+    const tags = getCurrentMessageTags();
+    if (Object.keys(tags).length === 0) return alert("No tags to export.");
+    
+    const template = {
+        name: "Custom Exported Template",
+        tags: tags
+    };
+    // Added a trailing comma so it's easy to paste straight into the message-templates.json array
+    showExportPopup("Message Template JSON Format", JSON.stringify(template, null, 2) + ",");
+}
+
+function showExportPopup(title, content) {
+    document.getElementById('exportTitle').innerText = title;
+    document.getElementById('exportContent').innerText = content;
+    document.getElementById('exportBackdrop').style.display = 'block';
+    document.getElementById('exportPopup').style.display = 'block';
+}
+
+function closeExportPopup() {
+    document.getElementById('exportBackdrop').style.display = 'none';
+    document.getElementById('exportPopup').style.display = 'none';
+}
+
+async function copyExportContent() {
+    const content = document.getElementById('exportContent').innerText;
+    try {
+        await navigator.clipboard.writeText(content);
+    } catch (err) {
+        alert("Failed to copy text. Please select and copy manually.");
     }
 }
