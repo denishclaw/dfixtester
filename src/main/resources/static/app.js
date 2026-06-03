@@ -1210,6 +1210,15 @@ async function sendAtdlOrder() {
         }
     }
 
+    // Add the main strategy identifier tag (e.g., 847=VWAP)
+    if (stratNode) {
+        const strategyTag = stratNode.getAttribute('strategyIdentifierTag');
+        const wireValue = stratNode.getAttribute('wireValue');
+        if (strategyTag && wireValue) {
+            tagMap[strategyTag] = wireValue;
+        }
+    }
+
     // Gather dynamic ATDL GUI form fields
     document.querySelectorAll('.atdl-input').forEach(input => {
         const tag = input.getAttribute('data-fixtag');
