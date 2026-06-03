@@ -45,8 +45,16 @@ public class FixStepDefinitions {
     private static final Map<String, Map<String, Integer>> dictionaries = new HashMap<>();
 
     private void reportMessage(String direction, String session, Message msg) {
+        reportMessage(direction, session, msg, null);
+    }
+
+    private void reportMessage(String direction, String session, Message msg, java.util.Set<Integer> validatedTags) {
         String msgStr = msg.toString().replace("\u0001", "|");
-        String json = "@@TEST_MSG@@{\"direction\":\"" + direction + "\",\"session\":\"" + session + "\",\"message\":\"" + msgStr + "\"}";
+        String tagsJson = "[]";
+        if (validatedTags != null && !validatedTags.isEmpty()) {
+            tagsJson = "[" + validatedTags.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]";
+        }
+        String json = "@@TEST_MSG@@{\"direction\":\"" + direction + "\",\"session\":\"" + session + "\",\"message\":\"" + msgStr + "\",\"validatedTags\":" + tagsJson + "}";
         System.out.println(json);
     }
 
@@ -200,7 +208,8 @@ public class FixStepDefinitions {
                     Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
                         if (msg.getString(ClOrdID.FIELD).endsWith(expectedClOrdId)) {
-                            reportMessage("IN", event.sessionID.toString(), msg);
+                            java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35, 11));
+                            reportMessage("IN", event.sessionID.toString(), msg, validated);
                             return true;
                         }
                     }
@@ -264,7 +273,14 @@ public class FixStepDefinitions {
                             }
                             if (allFieldsMatch) {
                                 if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
-                                reportMessage("IN", sessionString, msg);
+                                java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35));
+                                if (msg.isSetField(11)) validated.add(11);
+                                if (msg.isSetField(41)) validated.add(41);
+                                for (String key : expectedFields.keySet()) {
+                                    int tag = getTagId(key, version);
+                                    if (tag != -1) validated.add(tag);
+                                }
+                                reportMessage("IN", sessionString, msg, validated);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -332,7 +348,13 @@ public class FixStepDefinitions {
                                     scenarioContext.registerNewOrder(alias, msg.getString(11));
                                     System.out.println("   -> Assigned downstream ClOrdID '" + msg.getString(11) + "' to alias '" + alias + "'");
                                 }
-                                reportMessage("IN", sessionString, msg);
+                                java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35));
+                                if (msg.isSetField(11)) validated.add(11);
+                                for (String key : expectedFields.keySet()) {
+                                    int tag = getTagId(key, version);
+                                    if (tag != -1) validated.add(tag);
+                                }
+                                reportMessage("IN", sessionString, msg, validated);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {

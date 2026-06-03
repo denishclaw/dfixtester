@@ -404,7 +404,7 @@ function handleMessageClick(rawMessage, rowElement) {
     }
 }
 
-async function showFixMessageDetails(event, rawMessage, sessionString) {
+async function showFixMessageDetails(event, rawMessage, sessionString, validatedTags = []) {
     event.stopPropagation(); // Prevent the row click event from firing and autofilling tags
 
     let localDictionary = fixDictionary;
@@ -485,9 +485,13 @@ async function showFixMessageDetails(event, rawMessage, sessionString) {
             const tag = parts[0];
             const value = parts[1];
             const desc = localDictionary[tag] || '';
+            const isValidated = validatedTags && validatedTags.includes(parseInt(tag));
+            const badge = isValidated ? ' <span class="badge bg-success ms-1" title="Validated by Test">&#10003;</span>' : '';
+            const bgClass = isValidated ? 'table-success' : '';
+            
             html += `
-                <tr>
-                    <td class="fw-bold ps-3">${tag}</td>
+                <tr class="${bgClass}">
+                    <td class="fw-bold ps-3">${tag}${badge}</td>
                     <td>${desc}</td>
                     <td style="font-family: monospace; word-break: break-all;">${value}</td>
                 </tr>
@@ -695,7 +699,7 @@ function showTestStepMessages(btn) {
         const msgs = JSON.parse(decodeURIComponent(btn.getAttribute('data-msgs')));
         if (msgs.length === 0) return;
         const lastMsg = msgs[msgs.length - 1]; // typically the matched/sent message
-        showFixMessageDetails({ stopPropagation: () => {} }, lastMsg.message, lastMsg.session);
+        showFixMessageDetails({ stopPropagation: () => {} }, lastMsg.message, lastMsg.session, lastMsg.validatedTags);
     } catch(e) {
         console.error("Could not show message", e);
     }
@@ -738,18 +742,11 @@ async function showScenarioMessages(btn) {
 
         popup.innerHTML = `
             <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                <h5 class="m-0">Scenario FIX Messages (Side-by-Side)</h5>
+                <h5 class="m-0">Scenario FIX Messages Comparison</h5>
                 <button type="button" class="btn-close" onclick="document.getElementById('scenarioPopup').style.display='none'; document.getElementById('scenarioBackdrop').style.display='none';"></button>
             </div>
-            <div class="card-body p-0 d-flex flex-row" style="overflow-y: hidden; height: 100%;">
-                <div class="w-50 border-end d-flex flex-column" style="height: 100%;">
-                    <div class="bg-primary text-white p-2 fw-bold text-center sticky-top">Sent (OUT)</div>
-                    <div id="scenarioSentContent" class="p-0 flex-grow-1" style="overflow-y: auto;"></div>
-                </div>
-                <div class="w-50 d-flex flex-column" style="height: 100%;">
-                    <div class="bg-success text-white p-2 fw-bold text-center sticky-top">Received (IN)</div>
-                    <div id="scenarioReceivedContent" class="p-0 flex-grow-1" style="overflow-y: auto;"></div>
-                </div>
+            <div class="card-body p-0 d-flex flex-column" style="overflow-y: auto; height: 100%;">
+                <div id="scenarioComparisonContent" class="p-0 flex-grow-1"></div>
             </div>
         `;
         document.body.appendChild(popup);
@@ -758,24 +755,28 @@ async function showScenarioMessages(btn) {
     popup.style.display = 'flex';
     backdrop.style.display = 'block';
     
-    document.getElementById('scenarioSentContent').innerHTML = '<div class="p-3 text-muted">Loading...</div>';
-    document.getElementById('scenarioReceivedContent').innerHTML = '<div class="p-3 text-muted">Loading...</div>';
+    document.getElementById('scenarioComparisonContent').innerHTML = '<div class="p-3 text-muted">Loading...</div>';
 
     const outMsgs = msgs.filter(m => m.direction === 'OUT');
     const inMsgs = msgs.filter(m => m.direction === 'IN');
 
-    document.getElementById('scenarioSentContent').innerHTML = await buildMessageTables(outMsgs);
-    document.getElementById('scenarioReceivedContent').innerHTML = await buildMessageTables(inMsgs);
+    document.getElementById('scenarioComparisonContent').innerHTML = await buildComparisonTables(outMsgs, inMsgs);
 }
 
-async function buildMessageTables(msgs) {
-    if (msgs.length === 0) return '<div class="p-4 text-muted text-center fw-bold">No messages</div>';
+async function buildComparisonTables(outMsgs, inMsgs) {
+    const count = Math.max(outMsgs.length, inMsgs.length);
+    if (count === 0) return '<div class="p-4 text-muted text-center fw-bold">No messages</div>';
     
     let html = '';
-    for (const msg of msgs) {
+    for (let i = 0; i < count; i++) {
+        const outMsg = outMsgs[i];
+        const inMsg = inMsgs[i];
+        
         let localDictionary = fixDictionary;
-        if (msg.session) {
-            const parts = msg.session.split(':');
+        const sessionStr = (outMsg && outMsg.session) ? outMsg.session : (inMsg && inMsg.session ? inMsg.session : null);
+        
+        if (sessionStr) {
+            const parts = sessionStr.split(':');
             if (parts.length > 0) {
                 try {
                     const res = await fetch(`/api/dictionary?version=${encodeURIComponent(parts[0])}`);
@@ -784,37 +785,77 @@ async function buildMessageTables(msgs) {
             }
         }
 
+        const outMap = {};
+        const inMap = {};
+        const allTags = [];
+        
+        const inValidatedTags = (inMsg && inMsg.validatedTags) ? inMsg.validatedTags : [];
+        
+        if (outMsg) {
+            outMsg.message.split('|').forEach(field => {
+                if (!field) return;
+                const parts = field.split('=');
+                if (parts.length === 2) {
+                    allTags.push(parts[0]);
+                    outMap[parts[0]] = parts[1];
+                }
+            });
+        }
+        
+        if (inMsg) {
+            inMsg.message.split('|').forEach(field => {
+                if (!field) return;
+                const parts = field.split('=');
+                if (parts.length === 2) {
+                    if (!allTags.includes(parts[0])) allTags.push(parts[0]);
+                    inMap[parts[0]] = parts[1];
+                }
+            });
+        }
+
         html += `
-            <div class="bg-light border-bottom p-2 text-muted" style="font-size: 0.85em;">
-                <strong>Session:</strong> ${msg.session}
+            <div class="d-flex bg-light border-bottom border-top">
+                <div class="w-50 p-2 border-end text-center text-primary fw-bold">Sent (OUT) ${outMsg ? '<br><small class="text-muted fw-normal">' + outMsg.session + '</small>' : ''}</div>
+                <div class="w-50 p-2 text-center text-success fw-bold">Received (IN) ${inMsg ? '<br><small class="text-muted fw-normal">' + inMsg.session + '</small>' : ''}</div>
             </div>
             <table class="table table-sm table-bordered table-striped mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th class="ps-3" style="width: 20%;">Tag</th>
-                        <th style="width: 40%;">Description</th>
-                        <th style="width: 40%;">Value</th>
+                        <th class="ps-3" style="width: 10%;">Tag</th>
+                        <th style="width: 20%;">Description</th>
+                        <th style="width: 35%;">Sent Value</th>
+                        <th style="width: 35%;">Received Value</th>
                     </tr>
                 </thead>
                 <tbody>
         `;
         
-        const fields = msg.message.split('|');
-        fields.forEach(field => {
-            if (!field) return;
-            const parts = field.split('=');
-            if (parts.length === 2) {
-                const tag = parts[0];
-                const value = parts[1];
-                const desc = localDictionary[tag] || '';
-                html += `
-                    <tr>
-                        <td class="fw-bold ps-3">${tag}</td>
-                        <td>${desc}</td>
-                        <td style="font-family: monospace; word-break: break-all;">${value}</td>
-                    </tr>
-                `;
+        allTags.forEach(tag => {
+            const outVal = outMap[tag] !== undefined ? outMap[tag] : '';
+            const inVal = inMap[tag] !== undefined ? inMap[tag] : '';
+            const desc = localDictionary[tag] || '';
+            
+            let highlightStyle = '';
+            if (outVal !== '' && inVal !== '' && outVal !== inVal) {
+                highlightStyle = 'background-color: #fff3cd;'; // light yellow highlight for mismatched tags
             }
+            
+            const isValidated = inValidatedTags.includes(parseInt(tag));
+            let badge = '';
+            let inCellStyle = highlightStyle;
+            if (isValidated) {
+                badge = ' <span class="text-success fs-6" title="Validated by Test">&#10003;</span>';
+                inCellStyle += ' border: 2px solid #198754; background-color: #d1e7dd; font-weight: bold;';
+            }
+            
+            html += `
+                <tr>
+                    <td class="fw-bold ps-3">${tag}${badge}</td>
+                    <td class="text-muted">${desc}</td>
+                    <td style="font-family: monospace; word-break: break-all; ${highlightStyle}">${outVal}</td>
+                    <td style="font-family: monospace; word-break: break-all; ${inCellStyle}">${inVal}</td>
+                </tr>
+            `;
         });
         html += `</tbody></table>`;
     }
