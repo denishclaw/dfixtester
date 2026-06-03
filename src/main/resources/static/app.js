@@ -3,11 +3,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     loadSessions();
     loadTemplates();
     setupReplayThrottle();
-    addTagRow("35", "D"); // Add default MsgType=NewOrderSingle to the builder
+    addTagRow("35", "D", 'tagRows'); // Add default MsgType=NewOrderSingle to the builder
+    addTagRow("35", "D", 'atdlTagRows');
     startMessagePolling();
     loadFeatureFiles();
     startSystemLogPolling();
     loadAtdlFiles();
+    loadAtdlTemplates();
 });
 
 let activeSessions = [];
@@ -16,6 +18,7 @@ let lastMessageId = 0;
 let sessionColorMap = {};
 let colorIndex = 0;
 let messageTemplates = [];
+let atdlMessageTemplates = [];
 
 const sessionColors = [
     'table-light',
@@ -159,7 +162,7 @@ async function loadSessions() {
         const selects = [
             document.getElementById('sendSessionSelect'), 
             document.getElementById('replaySessionSelect'),
-            document.getElementById('atdlSessionSelect')
+            document.getElementById('atdlTargetSessionSelect')
         ];
         
         const logFilter = document.getElementById('logSessionFilter');
@@ -258,19 +261,19 @@ async function sessionAction(sessionString, action) {
     setTimeout(loadSessions, 500); // give the engine time to connect/disconnect before reloading UI
 }
 
-function addTagRow(defaultTag = "", defaultValue = "") {
+function addTagRow(defaultTag = "", defaultValue = "", containerId = 'tagRows') {
     const row = document.createElement('div');
     row.className = 'input-group mb-2 w-100 tag-row';
     const desc = fixDictionary[defaultTag] ? ` (${fixDictionary[defaultTag]})` : '';
     
     row.innerHTML = `
         <span class="input-group-text tag-label" style="width: 170px; display: inline-block; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Tag${desc}</span>
-        <input type="text" class="form-control fix-tag" placeholder="e.g. 35" value="${defaultTag}" oninput="updateTagLabel(this)">
+        <input type="text" class="form-control fix-tag" placeholder="e.g. 55" value="${defaultTag}" oninput="updateTagLabel(this)">
         <span class="input-group-text">Value</span>
-        <input type="text" class="form-control fix-val" placeholder="e.g. D" value="${defaultValue}">
+        <input type="text" class="form-control fix-val" placeholder="e.g. AAPL" value="${defaultValue}">
         <button class="btn btn-outline-danger" onclick="this.parentElement.remove()">X</button>
     `;
-    document.getElementById('tagRows').appendChild(row);
+    document.getElementById(containerId).appendChild(row);
 }
 
 function updateTagLabel(input) {
@@ -289,16 +292,19 @@ async function loadTemplates() {
         if (!templateSelect) {
             const tagRows = document.getElementById('tagRows');
             if (tagRows) {
-                const templateContainer = document.createElement('div');
-                templateContainer.className = 'mb-3';
-                templateContainer.innerHTML = `
-                    <label class="form-label fw-bold">Message Template</label>
-                    <select id="templateSelect" class="form-select" onchange="applyTemplate()">
-                        <option value="">-- Select Template --</option>
-                    </select>
-                `;
-                // Inject right before the tags section
-                tagRows.parentNode.insertBefore(templateContainer, tagRows);
+                let templateContainer = document.getElementById('templateContainer');
+                if (!templateContainer) {
+                    templateContainer = document.createElement('div');
+                    templateContainer.id = 'templateContainer';
+                    templateContainer.className = 'mb-3';
+                    templateContainer.innerHTML = `
+                        <label class="form-label fw-bold">Message Template</label>
+                        <select id="templateSelect" class="form-select" onchange="applyTemplate('single')">
+                            <option value="">-- Select Template --</option>
+                        </select>
+                    `;
+                    tagRows.parentNode.insertBefore(templateContainer, tagRows);
+                }
                 templateSelect = document.getElementById('templateSelect');
             }
         }
@@ -315,18 +321,47 @@ async function loadTemplates() {
     }
 }
 
-function applyTemplate() {
-    const templateIdx = document.getElementById('templateSelect').value;
+async function loadAtdlTemplates() {
+    try {
+        const res = await fetch('/api/templates/atdl');
+        atdlMessageTemplates = await res.json();
+        
+        const templateSelect = document.getElementById('atdlTemplateSelect');
+        if (templateSelect) {
+            templateSelect.innerHTML = '<option value="">-- Select Template --</option>';
+            atdlMessageTemplates.forEach((tpl, idx) => {
+                const opt = new Option(tpl.name, idx);
+                templateSelect.add(opt);
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load ATDL templates', err);
+    }
+}
+
+function applyTemplate(type = 'single') {
+    let templateIdx, templates, containerId;
+
+    if (type === 'atdl') {
+        templateIdx = document.getElementById('atdlTemplateSelect').value;
+        templates = atdlMessageTemplates;
+        containerId = 'atdlTagRows';
+    } else {
+        templateIdx = document.getElementById('templateSelect').value;
+        templates = messageTemplates;
+        containerId = 'tagRows';
+    }
+
     if (templateIdx === "") return;
     
-    const template = messageTemplates[templateIdx];
+    const template = templates[templateIdx];
     
-    const tagRows = document.getElementById('tagRows');
-    tagRows.innerHTML = '';
+    const tagRowsContainer = document.getElementById(containerId);
+    tagRowsContainer.innerHTML = '';
     
     if (template && template.tags) {
         for (const [tag, value] of Object.entries(template.tags)) {
-            addTagRow(tag, value);
+            addTagRow(tag, value, containerId);
         }
     }
 }
@@ -340,7 +375,7 @@ function generateFixTimestamp() {
 }
 
 async function sendMessage() {
-    const targetSession = document.getElementById('sendSessionSelect').value;
+    const targetSession = document.getElementById('sendSessionSelect')?.value;
     if (!targetSession) return alert("Select a target session first.");
 
     const tagMap = {};
@@ -1120,30 +1155,28 @@ function renderAtdlForm() {
 }
 
 async function sendAtdlOrder() {
-    const targetSession = document.getElementById('atdlSessionSelect').value;
+    const targetSession = document.getElementById('atdlTargetSessionSelect').value;
     if (!targetSession) return alert("Select a target session first.");
 
     const tagMap = {};
-    // Core Routing Fields
-    tagMap["35"] = "D"; // NewOrderSingle
-    tagMap["11"] = "ATDL_" + Date.now();
-    tagMap["60"] = generateFixTimestamp();
     
-    // Gather standard fields safely
-    const sym = document.getElementById('atdlSymbol').value.trim();
-    if (sym) tagMap["55"] = sym;
-    
-    const side = document.getElementById('atdlSide').value;
-    if (side) tagMap["54"] = side;
-    
-    const ordType = document.getElementById('atdlOrdType').value;
-    if (ordType) tagMap["40"] = ordType;
-    
-    const qty = document.getElementById('atdlOrderQty').value.trim();
-    if (qty) tagMap["38"] = qty;
-    
-    const px = document.getElementById('atdlPrice').value.trim();
-    if (px) tagMap["44"] = px;
+    // Gather base order fields from dynamic rows
+    document.querySelectorAll('#atdlTagRows .tag-row').forEach(row => {
+        const tagInput = row.querySelector('.fix-tag');
+        const valInput = row.querySelector('.fix-val');
+        const tag = tagInput.value.trim();
+        let val = valInput.value.trim();
+        
+        if (tag === "11") {
+            val = "ATDL_" + Date.now();
+            valInput.value = val;
+        } else if (tag === "60") {
+            val = generateFixTimestamp();
+            valInput.value = val;
+        }
+        
+        if (tag && val) tagMap[tag] = val;
+    });
 
     // Gather dynamic ATDL GUI form fields
     document.querySelectorAll('.atdl-input').forEach(input => {
