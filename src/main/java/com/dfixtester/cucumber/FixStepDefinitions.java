@@ -351,6 +351,40 @@ public class FixStepDefinitions {
         }
     }
 
+    @Then("I expect no message with MsgType {string} on session {string} for alias {string} within {int} seconds")
+    public void i_expect_no_message_on_session(String msgType, String sessionString, String alias, int timeoutSeconds) {
+        String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
+        if (expectedClOrdId == null) {
+            throw new IllegalArgumentException("Alias '" + alias + "' not found in scenario context.");
+        }
+
+        try {
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(timeoutSeconds))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> {
+                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                        Message msg = event.message;
+                        try {
+                            if (!msg.getHeader().getString(35).equals(msgType)) continue;
+                            if (!event.sessionID.toString().equals(sessionString)) continue;
+
+                            String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
+                            if (msgClOrdId.endsWith(expectedClOrdId)) {
+                                return true; // Message found! This triggers the AssertionError below
+                            }
+                        } catch (Exception e) {
+                            // Ignore
+                        }
+                    }
+                    return false;
+                });
+            throw new AssertionError("Expected NO message with MsgType '" + msgType + "' for alias '" + alias + "', but one arrived on session " + sessionString);
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            System.out.println("   -> MATCHED! No message arrived within the " + timeoutSeconds + "s timeout period.");
+        }
+    }
+
     private int getTagId(String fieldName, String version) {
         Map<String, Integer> dict = getDictionaryForVersion(version);
         if (dict.containsKey(fieldName)) {
