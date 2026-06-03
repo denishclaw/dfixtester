@@ -21,6 +21,9 @@
         <a class="nav-link" href="#" onclick="showTab('test-tab', this); return false;">Run Tests</a>
     </li>
     <li class="nav-item">
+        <a class="nav-link" href="#" onclick="showTab('atdl-tab', this); return false;">ATDL</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link" href="#" onclick="showTab('system-log-tab', this); return false;">System Logs</a>
     </li>
 </ul>
@@ -134,7 +137,76 @@
             </table>
         </div>
         
-        <pre id="testOutput" class="bg-dark text-light p-2 rounded mb-3" style="height: 450px; overflow-y: auto; font-size: 0.85em;">Awaiting execution...</pre>
+        <h5 class="mt-4 mb-2 text-muted">Console Output</h5>
+        <pre id="testOutput" class="bg-dark text-light p-3 rounded mb-3 w-100" style="height: 450px; overflow-y: auto; font-size: 0.85em;">Awaiting execution...</pre>
+    </div>
+
+    <!-- ATDL Tab -->
+    <div id="atdl-tab" class="tab-pane" style="display: none;">
+        <div class="row">
+            <div class="col-md-6" style="max-height: 85vh; overflow-y: auto;">
+                <h4 class="mb-4">ATDL Algorithmic Orders</h4>
+                
+                <div class="mb-4 p-3 border rounded bg-light">
+                    <label class="form-label fw-bold">Target Session:</label>
+                    <select id="atdlSessionSelect" class="form-select mb-3"></select>
+                    
+                    <label class="form-label fw-bold">Standard Order Fields:</label>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text" style="width: 100px;">Symbol</span>
+                        <input type="text" id="atdlSymbol" class="form-control" placeholder="e.g. AAPL">
+                    </div>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text" style="width: 100px;">Side</span>
+                        <select id="atdlSide" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="1">1 - Buy</option>
+                            <option value="2">2 - Sell</option>
+                            <option value="5">5 - Sell Short</option>
+                        </select>
+                    </div>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text" style="width: 100px;">OrdType</span>
+                        <select id="atdlOrdType" class="form-select">
+                            <option value="">-- Select --</option>
+                            <option value="1">1 - Market</option>
+                            <option value="2">2 - Limit</option>
+                        </select>
+                    </div>
+                    <div class="input-group mb-2">
+                        <span class="input-group-text" style="width: 100px;">OrderQty</span>
+                        <input type="number" id="atdlOrderQty" class="form-control" placeholder="e.g. 100">
+                    </div>
+                    <div class="input-group mb-3">
+                        <span class="input-group-text" style="width: 100px;">Price</span>
+                        <input type="number" id="atdlPrice" class="form-control" placeholder="e.g. 150.25" step="0.01">
+                    </div>
+                </div>
+
+                <div class="mb-3 d-flex gap-2 align-items-end">
+                    <div class="flex-grow-1">
+                        <label class="form-label fw-bold">Select ATDL Strategy File:</label>
+                        <select id="atdlFileSelect" class="form-select" onchange="loadAtdlFile()"><option value="">-- Loading... --</option></select>
+                    </div>
+                    <button class="btn btn-outline-secondary" onclick="loadAtdlFiles()">Refresh</button>
+                </div>
+                
+                <div class="mb-3" id="atdlStrategyContainer" style="display: none;">
+                    <label class="form-label fw-bold">Strategy Template:</label>
+                    <select id="atdlStrategySelect" class="form-select mb-3" onchange="renderAtdlForm()"></select>
+                </div>
+                
+                <div id="atdlFormContainer" class="p-3 border rounded bg-white shadow-sm mb-4" style="display: none;"></div>
+                
+                <button class="btn btn-success w-100 fw-bold py-2 mb-5" onclick="sendAtdlOrder()">Send ATDL Message</button>
+            </div>
+            <div class="col-md-6">
+                <div class="alert alert-info border-info">
+                    <h5 class="alert-heading">How this works</h5>
+                    <p class="mb-0">Select an ATDL XML file from the dropdown. The system will automatically parse the strategy parameters and build a dynamic GUI for you to input the algorithmic values. When you click send, the standard fields and the ATDL tags will be combined and sent directly to the selected FIX session.</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- System Logs Tab -->
@@ -164,6 +236,6 @@
     </div>
 </div>
 
-<script src="app.js?v=12"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>

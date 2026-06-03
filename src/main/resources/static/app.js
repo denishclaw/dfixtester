@@ -7,6 +7,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     startMessagePolling();
     loadFeatureFiles();
     startSystemLogPolling();
+    loadAtdlFiles();
 });
 
 let activeSessions = [];
@@ -155,7 +156,11 @@ async function loadSessions() {
         activeSessions = await res.json();
         
         const tbody = document.querySelector('#sessionTable tbody');
-        const selects = [document.getElementById('sendSessionSelect'), document.getElementById('replaySessionSelect')];
+        const selects = [
+            document.getElementById('sendSessionSelect'), 
+            document.getElementById('replaySessionSelect'),
+            document.getElementById('atdlSessionSelect')
+        ];
         
         const logFilter = document.getElementById('logSessionFilter');
         const currentLogFilterVal = logFilter ? logFilter.value : '';
@@ -989,4 +994,172 @@ async function copyExportContent() {
     } catch (err) {
         alert("Failed to copy text. Please select and copy manually.");
     }
+}
+
+/* ================= ATDL SUPPORT ================= */
+
+let currentAtdlDoc = null;
+
+async function loadAtdlFiles() {
+    try {
+        const res = await fetch('/api/atdl/files');
+        const files = await res.json();
+        const sel = document.getElementById('atdlFileSelect');
+        if (!sel) return;
+        
+        sel.innerHTML = '<option value="">-- Select ATDL File --</option>';
+        files.forEach(f => sel.add(new Option(f, f)));
+    } catch(e) { 
+        console.error("Failed to load ATDL files", e); 
+    }
+}
+
+async function loadAtdlFile() {
+    const filename = document.getElementById('atdlFileSelect').value;
+    const stratContainer = document.getElementById('atdlStrategyContainer');
+    const formContainer = document.getElementById('atdlFormContainer');
+    
+    if (!filename) {
+        stratContainer.style.display = 'none';
+        formContainer.style.display = 'none';
+        return;
+    }
+    
+    try {
+        const res = await fetch(`/api/atdl/file/${encodeURIComponent(filename)}`);
+        const xmlText = await res.text();
+        
+        const parser = new DOMParser();
+        currentAtdlDoc = parser.parseFromString(xmlText, "text/xml");
+
+        const strategies = currentAtdlDoc.getElementsByTagNameNS("*", "Strategy");
+        if (strategies.length === 0 && currentAtdlDoc.getElementsByTagName("Strategy").length > 0) {
+            // Fallback for some browsers if namespace querying fails
+            strategies = currentAtdlDoc.getElementsByTagName("Strategy");
+        }
+
+        const stratSel = document.getElementById('atdlStrategySelect');
+        stratSel.innerHTML = '';
+        for (let i = 0; i < strategies.length; i++) {
+            const name = strategies[i].getAttribute('name');
+            const uiRep = strategies[i].getAttribute('uiRep') || name;
+            stratSel.add(new Option(uiRep, name));
+        }
+        
+        stratContainer.style.display = 'block';
+        renderAtdlForm();
+    } catch (e) {
+        alert("Error parsing ATDL XML: " + e.message);
+    }
+}
+
+function renderAtdlForm() {
+    const stratName = document.getElementById('atdlStrategySelect').value;
+    const container = document.getElementById('atdlFormContainer');
+    container.innerHTML = '';
+    container.style.display = 'block';
+
+    if (!currentAtdlDoc) return;
+
+    const strategies = currentAtdlDoc.getElementsByTagNameNS("*", "Strategy");
+    let stratNode = null;
+    for (let i = 0; i < strategies.length; i++) {
+        if (strategies[i].getAttribute('name') === stratName) {
+            stratNode = strategies[i];
+            break;
+        }
+    }
+    if (!stratNode) return;
+
+    const params = stratNode.getElementsByTagNameNS("*", "Parameter");
+    let controlsRendered = 0;
+
+    for (let i = 0; i < params.length; i++) {
+        const p = params[i];
+        const name = p.getAttribute('name');
+        const fixTag = p.getAttribute('fixTag');
+        const type = p.getAttribute('xsi:type') || '';
+        
+        if (!fixTag) continue; // Only care about parameters mapped to a real FIX tag
+
+        const enums = p.getElementsByTagNameNS("*", "EnumPair");
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2 atdl-param-row';
+
+        let inputHtml = '';
+        if (enums.length > 0) {
+            inputHtml = `<select class="form-select atdl-input" data-fixtag="${fixTag}">`;
+            inputHtml += `<option value="">-- Select --</option>`;
+            for (let j = 0; j < enums.length; j++) {
+                const eVal = enums[j].getAttribute('wireValue');
+                const eUi = enums[j].getAttribute('enumID') || eVal;
+                inputHtml += `<option value="${eVal}">${eUi}</option>`;
+            }
+            inputHtml += `</select>`;
+        } else if (type.includes('Boolean_t')) {
+            inputHtml = `<select class="form-select atdl-input" data-fixtag="${fixTag}">
+                <option value="">-- Select --</option>
+                <option value="Y">Y - Yes</option>
+                <option value="N">N - No</option>
+            </select>`;
+        } else {
+            inputHtml = `<input type="text" class="form-control atdl-input" data-fixtag="${fixTag}" placeholder="${type}">`;
+        }
+
+        div.innerHTML = `
+            <span class="input-group-text" style="width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${name}">${name} <small class="text-muted ms-1">(${fixTag})</small></span>
+            ${inputHtml}
+        `;
+        container.appendChild(div);
+        controlsRendered++;
+    }
+    
+    if (controlsRendered === 0) {
+        container.innerHTML = '<span class="text-muted">No mappable FIX Tag parameters found in this strategy.</span>';
+    }
+}
+
+async function sendAtdlOrder() {
+    const targetSession = document.getElementById('atdlSessionSelect').value;
+    if (!targetSession) return alert("Select a target session first.");
+
+    const tagMap = {};
+    // Core Routing Fields
+    tagMap["35"] = "D"; // NewOrderSingle
+    tagMap["11"] = "ATDL_" + Date.now();
+    tagMap["60"] = generateFixTimestamp();
+    
+    // Gather standard fields safely
+    const sym = document.getElementById('atdlSymbol').value.trim();
+    if (sym) tagMap["55"] = sym;
+    
+    const side = document.getElementById('atdlSide').value;
+    if (side) tagMap["54"] = side;
+    
+    const ordType = document.getElementById('atdlOrdType').value;
+    if (ordType) tagMap["40"] = ordType;
+    
+    const qty = document.getElementById('atdlOrderQty').value.trim();
+    if (qty) tagMap["38"] = qty;
+    
+    const px = document.getElementById('atdlPrice').value.trim();
+    if (px) tagMap["44"] = px;
+
+    // Gather dynamic ATDL GUI form fields
+    document.querySelectorAll('.atdl-input').forEach(input => {
+        const tag = input.getAttribute('data-fixtag');
+        const val = input.value.trim();
+        if (tag && val !== '') {
+            tagMap[tag] = val;
+        }
+    });
+
+    const res = await fetch(`/api/sessions/${encodeURIComponent(targetSession)}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(tagMap)
+    });
+    
+    if (!res.ok) alert("Error sending ATDL message: " + await res.text());
+    else alert("ATDL Message Sent Successfully!");
 }
