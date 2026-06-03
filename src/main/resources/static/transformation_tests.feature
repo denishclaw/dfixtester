@@ -1,10 +1,13 @@
 Feature: Message Routing and Tag Transformation Validation
 
   Background:
-    # Ensure both sides of the connection are active before testing
-    # Replace these session strings with your actual configured QuickFIX/J Session IDs
-    Given the session "FIX.4.2:CLIENT->BROKER" is logged on
-    And the session "FIX.4.2:EXCHANGE->BROKER" is logged on
+    # 1. Define your variables here
+    Given I map session alias "Upstream" to "FIX.4.2:CLIENT->BROKER"
+    And I map session alias "Downstream" to "FIX.4.2:EXCHANGE->BROKER"
+    
+    # 2. Use them everywhere else!
+    And the session "Upstream" is logged on
+    And the session "Downstream" is logged on
 
   Scenario: Verify NewOrderSingle is routed to exchange and tag 5000 is mapped to 115
     # The 'alias' automatically generates a unique tag 11 (ClOrdID) and stores it in context
