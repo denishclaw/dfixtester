@@ -261,7 +261,6 @@ public class FixStepDefinitions {
                                         break;
                                     }
                                 }
-                                if (allFieldsMatch) return true;
                             }
                             if (allFieldsMatch) {
                                 if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
