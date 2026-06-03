@@ -110,9 +110,15 @@ public class FixStepDefinitions {
         scenarioContext.clear();
     }
 
+    @Given("I map session alias {string} to {string}")
+    public void i_map_session_alias_to(String alias, String sessionString) {
+        scenarioContext.addSessionAlias(alias, sessionString);
+    }
+
     @Given("the session {string} is logged on")
     public void the_session_is_logged_on(String sessionString) {
-        sessionID = new SessionID(sessionString);
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
+        sessionID = new SessionID(resolvedSession);
         Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> 
             Session.lookupSession(sessionID) != null && Session.lookupSession(sessionID).isLoggedOn()
         );
@@ -153,12 +159,13 @@ public class FixStepDefinitions {
 
     @When("I send a NewOrderSingle with alias {string} to session {string} with fields:")
     public void i_send_a_newordersingle_to_session(String alias, String sessionString, DataTable dataTable) throws Exception {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
         Map<String, String> fields = dataTable.asMap();
         lastClOrdId = UUID.randomUUID().toString();
         
         scenarioContext.registerNewOrder(alias, lastClOrdId);
 
-        SessionID targetSession = new SessionID(sessionString);
+        SessionID targetSession = new SessionID(resolvedSession);
         String version = targetSession.getBeginString();
 
         NewOrderSingle order = new NewOrderSingle(
@@ -185,7 +192,7 @@ public class FixStepDefinitions {
         }
 
         Session.sendToTarget(order, targetSession);
-        reportMessage("OUT", sessionString, order);
+        reportMessage("OUT", resolvedSession, order);
     }
 
     @Then("I expect an ExecutionReport for alias {string} within {int} seconds")
@@ -211,9 +218,10 @@ public class FixStepDefinitions {
 
     @Then("I expect a message with MsgType {string} on session {string} for alias {string} within {int} seconds with fields:")
     public void i_expect_a_message_on_session_with_fields(String msgType, String sessionString, String alias, int timeoutSeconds, DataTable dataTable) {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
         String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
         Map<String, String> expectedFields = dataTable.asMap();
-        SessionID expectedSession = new SessionID(sessionString);
+        SessionID expectedSession = new SessionID(resolvedSession);
         String version = expectedSession.getBeginString();
 
         java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
@@ -229,14 +237,14 @@ public class FixStepDefinitions {
                             if (!msg.getHeader().getString(35).equals(msgType)) continue;
 
                             // Ensure this message arrived ON the correct session
-                            if (!event.sessionID.toString().equals(sessionString)) {
+                            if (!event.sessionID.toString().equals(resolvedSession)) {
                                 continue;
                             }
                             
                             String rawMsg = msg.toString();
                             boolean isNewMessage = debuggedMessages.add(rawMsg);
                             if (isNewMessage) {
-                                System.out.println("\n[DEBUG] Found candidate message on " + sessionString + " with MsgType " + msgType);
+                                System.out.println("\n[DEBUG] Found candidate message on " + resolvedSession + " with MsgType " + msgType);
                             }
 
                             // Verify it is tied to our specific order alias via Tag 11 (ClOrdID) or 41 (OrigClOrdID)
@@ -264,7 +272,7 @@ public class FixStepDefinitions {
                             }
                             if (allFieldsMatch) {
                                 if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
-                                reportMessage("IN", sessionString, msg);
+                                reportMessage("IN", resolvedSession, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -276,7 +284,7 @@ public class FixStepDefinitions {
                     return false;
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
-            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID ending with: " + expectedClOrdId + ") not found on session " + sessionString + ". " +
+            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID ending with: " + expectedClOrdId + ") not found on session " + resolvedSession + ". " +
                               "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
                               "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
             throw new AssertionError(errorMsg, e);
@@ -285,8 +293,9 @@ public class FixStepDefinitions {
 
     @Then("I expect a routed message with MsgType {string} on session {string} and assign alias {string} within {int} seconds with fields:")
     public void i_expect_a_routed_message_on_session_and_assign_alias(String msgType, String sessionString, String alias, int timeoutSeconds, DataTable dataTable) {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
         Map<String, String> expectedFields = dataTable.asMap();
-        SessionID expectedSession = new SessionID(sessionString);
+        SessionID expectedSession = new SessionID(resolvedSession);
         String version = expectedSession.getBeginString();
         
         java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
@@ -301,14 +310,14 @@ public class FixStepDefinitions {
                         try {
                             if (!msg.getHeader().getString(35).equals(msgType)) continue;
 
-                            if (!event.sessionID.toString().equals(sessionString)) {
+                            if (!event.sessionID.toString().equals(resolvedSession)) {
                                 continue;
                             }
                             
                             String rawMsg = msg.toString();
                             boolean isNewMessage = debuggedMessages.add(rawMsg);
                             if (isNewMessage) {
-                                System.out.println("\n[DEBUG] Found candidate routed message on " + sessionString + " with MsgType " + msgType);
+                                System.out.println("\n[DEBUG] Found candidate routed message on " + resolvedSession + " with MsgType " + msgType);
                             }
 
                             boolean allFieldsMatch = true;
@@ -332,7 +341,7 @@ public class FixStepDefinitions {
                                     scenarioContext.registerNewOrder(alias, msg.getString(11));
                                     System.out.println("   -> Assigned downstream ClOrdID '" + msg.getString(11) + "' to alias '" + alias + "'");
                                 }
-                                reportMessage("IN", sessionString, msg);
+                                reportMessage("IN", resolvedSession, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -344,7 +353,7 @@ public class FixStepDefinitions {
                     return false;
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
-            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected routed message not found on session " + sessionString + ". " +
+            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected routed message not found on session " + resolvedSession + ". " +
                               "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
                               "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
             throw new AssertionError(errorMsg, e);
