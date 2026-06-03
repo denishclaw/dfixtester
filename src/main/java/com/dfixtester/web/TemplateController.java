@@ -2,6 +2,7 @@ package com.dfixtester.web;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.system.ApplicationHome;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.Resource;
 import org.springframework.http.ResponseEntity;
@@ -23,21 +24,38 @@ public class TemplateController {
 
     @GetMapping
     public ResponseEntity<List<Map<String, Object>>> getTemplates() {
+        return ResponseEntity.ok(loadTemplatesFromFile("message-templates.json"));
+    }
+
+    @GetMapping("/atdl")
+    public ResponseEntity<List<Map<String, Object>>> getAtdlTemplates() {
+        return ResponseEntity.ok(loadTemplatesFromFile("atdl-message-templates.json"));
+    }
+
+    private List<Map<String, Object>> loadTemplatesFromFile(String filename) {
         try {
-            File extFile = new File("config/message-templates.json");
+            ApplicationHome home = new ApplicationHome(TemplateController.class);
+            File baseDir = home.getDir();
+
+            File extFile = new File(baseDir, "config/" + filename);
+            if (!extFile.exists()) {
+                extFile = new File(baseDir, filename);
+            }
+            if (!extFile.exists()) {
+                extFile = new File("config/" + filename);
+            }
+
             if (extFile.exists()) {
-                List<Map<String, Object>> templates = objectMapper.readValue(extFile, new TypeReference<List<Map<String, Object>>>() {});
-                return ResponseEntity.ok(templates);
+                return objectMapper.readValue(extFile, new TypeReference<>() {});
             }
             
-            Resource resource = new ClassPathResource("config/message-templates.json");
+            Resource resource = new ClassPathResource("config/" + filename);
             if (resource.exists()) {
-                List<Map<String, Object>> templates = objectMapper.readValue(resource.getInputStream(), new TypeReference<List<Map<String, Object>>>() {});
-                return ResponseEntity.ok(templates);
+                return objectMapper.readValue(resource.getInputStream(), new TypeReference<>() {});
             }
         } catch (IOException e) {
             e.printStackTrace();
         }
-        return ResponseEntity.ok(new ArrayList<>());
+        return new ArrayList<>();
     }
 }
