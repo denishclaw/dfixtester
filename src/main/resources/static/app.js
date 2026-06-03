@@ -979,7 +979,12 @@ function getCurrentMessageTags(containerId = 'tagRows') {
 }
 
 function exportToCucumber(type = 'single') {
-    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    let tags;
+    try {
+        tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    } catch (e) {
+        return alert(e.message);
+    }
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     let str = "";
@@ -992,14 +997,24 @@ function exportToCucumber(type = 'single') {
 }
 
 function exportToMultiMessage(type = 'single') {
-    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    let tags;
+    try {
+        tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    } catch (e) {
+        return alert(e.message);
+    }
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     showExportPopup("Multiple Messages JSON Format", JSON.stringify([tags], null, 2));
 }
 
 function exportToTemplate(type = 'single') {
-    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    let tags;
+    try {
+        tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
+    } catch (e) {
+        return alert(e.message);
+    }
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     const template = {
@@ -1114,6 +1129,7 @@ function renderAtdlForm() {
         const name = p.getAttribute('name');
         const fixTag = p.getAttribute('fixTag');
         const type = p.getAttribute('xsi:type') || '';
+        const use = p.getAttribute('use');
         
         if (!fixTag) continue; // Only care about parameters mapped to a real FIX tag
 
@@ -1141,8 +1157,10 @@ function renderAtdlForm() {
             inputHtml = `<input type="text" class="form-control atdl-input" data-fixtag="${fixTag}" placeholder="${type}">`;
         }
 
+        const reqHtml = use === 'required' ? ' <span class="text-danger" title="Required">*</span>' : '';
+
         div.innerHTML = `
-            <span class="input-group-text" style="width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${name}">${name} <small class="text-muted ms-1">(${fixTag})</small></span>
+            <span class="input-group-text" style="width: 220px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;" title="${name}">${name}${reqHtml} <small class="text-muted ms-1">(${fixTag})</small></span>
             ${inputHtml}
         `;
         container.appendChild(div);
@@ -1221,6 +1239,20 @@ function getAtdlMessageTags() {
         }
     });
 
+    // Validate required ATDL fields
+    if (stratNode) {
+        const params = stratNode.getElementsByTagNameNS("*", "Parameter");
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i];
+            const fixTag = p.getAttribute('fixTag');
+            const name = p.getAttribute('name');
+            const use = p.getAttribute('use');
+            if (use === 'required' && fixTag && !tagMap[fixTag]) {
+                throw new Error(`Mandatory ATDL parameter '${name}' (Tag ${fixTag}) is missing a value.`);
+            }
+        }
+    }
+
     return tagMap;
 }
 
@@ -1246,7 +1278,12 @@ async function sendAtdlOrder() {
         }
     });
 
-    const tagMap = getAtdlMessageTags();
+    let tagMap;
+    try {
+        tagMap = getAtdlMessageTags();
+    } catch (e) {
+        return alert(e.message);
+    }
 
     const res = await fetch(`/api/sessions/${encodeURIComponent(targetSession)}/send`, {
         method: 'POST',
