@@ -1211,9 +1211,14 @@ async function sendAtdlOrder() {
     }
 
     // Add the main strategy identifier tag (e.g., 847=VWAP)
-    if (stratNode) {
-        const strategyTag = stratNode.getAttribute('strategyIdentifierTag');
+    if (stratNode && currentAtdlDoc) {
+        let strategiesNode = currentAtdlDoc.getElementsByTagNameNS("*", "Strategies")[0];
+        if (!strategiesNode) strategiesNode = currentAtdlDoc.getElementsByTagName("Strategies")[0];
+        if (!strategiesNode) strategiesNode = currentAtdlDoc.documentElement; // Fallback to root
+
+        const strategyTag = strategiesNode ? strategiesNode.getAttribute('strategyIdentifierTag') : null;
         const wireValue = stratNode.getAttribute('wireValue');
+        
         if (strategyTag && wireValue) {
             tagMap[strategyTag] = wireValue;
         }
