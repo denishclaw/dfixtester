@@ -4,6 +4,7 @@ import io.cucumber.plugin.ConcurrentEventListener;
 import io.cucumber.plugin.event.EventPublisher;
 import io.cucumber.plugin.event.PickleStepTestStep;
 import io.cucumber.plugin.event.TestCaseStarted;
+import io.cucumber.plugin.event.TestCaseFinished;
 import io.cucumber.plugin.event.TestStepFinished;
 
 public class LiveTestReporter implements ConcurrentEventListener {
@@ -12,6 +13,7 @@ public class LiveTestReporter implements ConcurrentEventListener {
     public void setEventPublisher(EventPublisher publisher) {
         publisher.registerHandlerFor(TestCaseStarted.class, this::handleTestCaseStarted);
         publisher.registerHandlerFor(TestStepFinished.class, this::handleTestStepFinished);
+        publisher.registerHandlerFor(TestCaseFinished.class, this::handleTestCaseFinished);
     }
 
     private void handleTestCaseStarted(TestCaseStarted event) {
@@ -27,6 +29,11 @@ public class LiveTestReporter implements ConcurrentEventListener {
             
             System.out.println("@@TEST_EVENT@@{\"event\":\"TestStepFinished\",\"name\":\"" + escapeJson(stepText) + "\",\"status\":\"" + status + "\",\"error\":\"" + escapeJson(error) + "\"}");
         }
+    }
+
+    private void handleTestCaseFinished(TestCaseFinished event) {
+        String status = event.getResult().getStatus().name();
+        System.out.println("@@TEST_EVENT@@{\"event\":\"TestCaseFinished\",\"name\":\"" + escapeJson(event.getTestCase().getName()) + "\",\"status\":\"" + status + "\"}");
     }
 
     private String escapeJson(String input) {

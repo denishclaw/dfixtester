@@ -634,13 +634,18 @@ async function runTests() {
     }
 }
 
+let currentScenarioRow = null;
+let currentScenarioMessages = [];
+
 function handleTestEvent(event, tbody, pendingMessages) {
     if (!tbody) return;
     if (event.event === 'TestCaseStarted') {
         const tr = document.createElement('tr');
         tr.className = 'table-secondary fw-bold';
-        tr.innerHTML = `<td colspan="3">${event.name}</td>`;
+        tr.innerHTML = `<td colspan="2">${event.name}</td><td class="scenario-msg-cell text-center"></td>`;
         tbody.appendChild(tr);
+        currentScenarioRow = tr;
+        currentScenarioMessages = [];
     } else if (event.event === 'TestStepFinished') {
         const tr = document.createElement('tr');
         
@@ -652,6 +657,7 @@ function handleTestEvent(event, tbody, pendingMessages) {
 
         let msgBtn = '';
         if (pendingMessages.length > 0) {
+            currentScenarioMessages.push(...pendingMessages);
             const encoded = encodeURIComponent(JSON.stringify(pendingMessages));
             msgBtn = `<button class="btn btn-sm btn-outline-info p-0 px-1" onclick="showTestStepMessages(this)" data-msgs="${encoded}" title="View FIX Messages">&#128233;</button>`;
         }
@@ -659,7 +665,7 @@ function handleTestEvent(event, tbody, pendingMessages) {
         tr.innerHTML = `
             <td class="ps-4" style="word-break: break-word;">${event.name}</td>
             <td>${statusBadge}</td>
-            <td>${msgBtn}</td>
+            <td class="text-center">${msgBtn}</td>
         `;
         tbody.appendChild(tr);
 
@@ -671,6 +677,16 @@ function handleTestEvent(event, tbody, pendingMessages) {
         
         const container = tbody.closest('.table-responsive');
         if (container) container.scrollTop = container.scrollHeight;
+    } else if (event.event === 'TestCaseFinished') {
+        if (currentScenarioRow && currentScenarioMessages.length > 0) {
+            const encoded = encodeURIComponent(JSON.stringify(currentScenarioMessages));
+            const cell = currentScenarioRow.querySelector('.scenario-msg-cell');
+            if (cell) {
+                cell.innerHTML = `<button class="btn btn-sm btn-primary p-0 px-2 fw-bold" onclick="showScenarioMessages(this)" data-msgs="${encoded}" title="Compare Sent vs Received Messages">&#8644;</button>`;
+            }
+        }
+        currentScenarioRow = null;
+        currentScenarioMessages = [];
     }
 }
 
@@ -683,6 +699,126 @@ function showTestStepMessages(btn) {
     } catch(e) {
         console.error("Could not show message", e);
     }
+}
+
+async function showScenarioMessages(btn) {
+    const msgs = JSON.parse(decodeURIComponent(btn.getAttribute('data-msgs')));
+    if (msgs.length === 0) return;
+
+    let popup = document.getElementById('scenarioPopup');
+    let backdrop = document.getElementById('scenarioBackdrop');
+
+    if (!popup) {
+        backdrop = document.createElement('div');
+        backdrop.id = 'scenarioBackdrop';
+        backdrop.style.position = 'fixed';
+        backdrop.style.top = '0';
+        backdrop.style.left = '0';
+        backdrop.style.width = '100vw';
+        backdrop.style.height = '100vh';
+        backdrop.style.backgroundColor = 'rgba(0,0,0,0.5)';
+        backdrop.style.zIndex = '1040';
+        backdrop.onclick = () => { popup.style.display = 'none'; backdrop.style.display = 'none'; };
+        document.body.appendChild(backdrop);
+
+        popup = document.createElement('div');
+        popup.id = 'scenarioPopup';
+        popup.className = 'card shadow';
+        popup.style.position = 'fixed';
+        popup.style.top = '50%';
+        popup.style.left = '50%';
+        popup.style.transform = 'translate(-50%, -50%)';
+        popup.style.backgroundColor = 'white';
+        popup.style.zIndex = '1050';
+        popup.style.maxHeight = '90vh';
+        popup.style.width = '95vw';
+        popup.style.maxWidth = '1400px';
+        popup.style.display = 'flex';
+        popup.style.flexDirection = 'column';
+
+        popup.innerHTML = `
+            <div class="card-header d-flex justify-content-between align-items-center bg-light">
+                <h5 class="m-0">Scenario FIX Messages (Side-by-Side)</h5>
+                <button type="button" class="btn-close" onclick="document.getElementById('scenarioPopup').style.display='none'; document.getElementById('scenarioBackdrop').style.display='none';"></button>
+            </div>
+            <div class="card-body p-0 d-flex flex-row" style="overflow-y: hidden; height: 100%;">
+                <div class="w-50 border-end d-flex flex-column" style="height: 100%;">
+                    <div class="bg-primary text-white p-2 fw-bold text-center sticky-top">Sent (OUT)</div>
+                    <div id="scenarioSentContent" class="p-0 flex-grow-1" style="overflow-y: auto;"></div>
+                </div>
+                <div class="w-50 d-flex flex-column" style="height: 100%;">
+                    <div class="bg-success text-white p-2 fw-bold text-center sticky-top">Received (IN)</div>
+                    <div id="scenarioReceivedContent" class="p-0 flex-grow-1" style="overflow-y: auto;"></div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(popup);
+    }
+
+    popup.style.display = 'flex';
+    backdrop.style.display = 'block';
+    
+    document.getElementById('scenarioSentContent').innerHTML = '<div class="p-3 text-muted">Loading...</div>';
+    document.getElementById('scenarioReceivedContent').innerHTML = '<div class="p-3 text-muted">Loading...</div>';
+
+    const outMsgs = msgs.filter(m => m.direction === 'OUT');
+    const inMsgs = msgs.filter(m => m.direction === 'IN');
+
+    document.getElementById('scenarioSentContent').innerHTML = await buildMessageTables(outMsgs);
+    document.getElementById('scenarioReceivedContent').innerHTML = await buildMessageTables(inMsgs);
+}
+
+async function buildMessageTables(msgs) {
+    if (msgs.length === 0) return '<div class="p-4 text-muted text-center fw-bold">No messages</div>';
+    
+    let html = '';
+    for (const msg of msgs) {
+        let localDictionary = fixDictionary;
+        if (msg.session) {
+            const parts = msg.session.split(':');
+            if (parts.length > 0) {
+                try {
+                    const res = await fetch(`/api/dictionary?version=${encodeURIComponent(parts[0])}`);
+                    localDictionary = await res.json();
+                } catch (err) { }
+            }
+        }
+
+        html += `
+            <div class="bg-light border-bottom p-2 text-muted" style="font-size: 0.85em;">
+                <strong>Session:</strong> ${msg.session}
+            </div>
+            <table class="table table-sm table-bordered table-striped mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="ps-3" style="width: 20%;">Tag</th>
+                        <th style="width: 40%;">Description</th>
+                        <th style="width: 40%;">Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        const fields = msg.message.split('|');
+        fields.forEach(field => {
+            if (!field) return;
+            const parts = field.split('=');
+            if (parts.length === 2) {
+                const tag = parts[0];
+                const value = parts[1];
+                const desc = localDictionary[tag] || '';
+                html += `
+                    <tr>
+                        <td class="fw-bold ps-3">${tag}</td>
+                        <td>${desc}</td>
+                        <td style="font-family: monospace; word-break: break-all;">${value}</td>
+                    </tr>
+                `;
+            }
+        });
+        html += \`</tbody></table>\`;
+    }
+    return html;
 }
 
 let lastSystemLogId = 0;
