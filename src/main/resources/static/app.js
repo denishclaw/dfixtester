@@ -964,9 +964,9 @@ function showTab(tabId, element) {
     }
 }
 
-function getCurrentMessageTags() {
+function getCurrentMessageTags(containerId = 'tagRows') {
     const tagMap = {};
-    document.querySelectorAll('.tag-row').forEach(row => {
+    document.querySelectorAll(`#${containerId} .tag-row`).forEach(row => {
         const tagInput = row.querySelector('.fix-tag');
         const valInput = row.querySelector('.fix-val');
         if (tagInput && valInput) {
@@ -978,8 +978,8 @@ function getCurrentMessageTags() {
     return tagMap;
 }
 
-function exportToCucumber() {
-    const tags = getCurrentMessageTags();
+function exportToCucumber(type = 'single') {
+    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     let str = "";
@@ -991,15 +991,15 @@ function exportToCucumber() {
     showExportPopup("Cucumber Feature Format", str.trimEnd());
 }
 
-function exportToMultiMessage() {
-    const tags = getCurrentMessageTags();
+function exportToMultiMessage(type = 'single') {
+    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     showExportPopup("Multiple Messages JSON Format", JSON.stringify([tags], null, 2));
 }
 
-function exportToTemplate() {
-    const tags = getCurrentMessageTags();
+function exportToTemplate(type = 'single') {
+    const tags = type === 'atdl' ? getAtdlMessageTags() : getCurrentMessageTags();
     if (Object.keys(tags).length === 0) return alert("No tags to export.");
     
     const template = {
@@ -1154,13 +1154,8 @@ function renderAtdlForm() {
     }
 }
 
-async function sendAtdlOrder() {
-    const targetSession = document.getElementById('atdlTargetSessionSelect').value;
-    if (!targetSession) return alert("Select a target session first.");
-
+function getAtdlMessageTags() {
     const stratName = document.getElementById('atdlStrategySelect').value;
-    if (!stratName && currentAtdlDoc) return alert("Please select an ATDL strategy.");
-
     const tagMap = {};
     
     // Get the selected strategy node from the ATDL document
@@ -1184,13 +1179,6 @@ async function sendAtdlOrder() {
         const tag = tagInput.value.trim();
         let val = valInput.value.trim();
         
-        if (tag === "11") {
-            val = "ATDL_" + Date.now();
-            valInput.value = val;
-        } else if (tag === "60") {
-            val = generateFixTimestamp();
-            valInput.value = val;
-        }
         
         if (tag && val) tagMap[tag] = val;
     });
@@ -1232,6 +1220,33 @@ async function sendAtdlOrder() {
             tagMap[tag] = val;
         }
     });
+
+    return tagMap;
+}
+
+async function sendAtdlOrder() {
+    const targetSession = document.getElementById('atdlTargetSessionSelect').value;
+    if (!targetSession) return alert("Select a target session first.");
+
+    const stratName = document.getElementById('atdlStrategySelect').value;
+    if (!stratName && currentAtdlDoc) return alert("Please select an ATDL strategy.");
+
+    // Generate 11 and 60 if they exist in the form
+    document.querySelectorAll('#atdlTagRows .tag-row').forEach(row => {
+        const tagInput = row.querySelector('.fix-tag');
+        const valInput = row.querySelector('.fix-val');
+        if (!tagInput || !valInput) return;
+        
+        const tag = tagInput.value.trim();
+        
+        if (tag === "11") {
+            valInput.value = "ATDL_" + Date.now();
+        } else if (tag === "60") {
+            valInput.value = generateFixTimestamp();
+        }
+    });
+
+    const tagMap = getAtdlMessageTags();
 
     const res = await fetch(`/api/sessions/${encodeURIComponent(targetSession)}/send`, {
         method: 'POST',

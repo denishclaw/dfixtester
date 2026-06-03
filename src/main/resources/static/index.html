@@ -18,6 +18,9 @@
         <a class="nav-link" href="#" onclick="showTab('send-orders-tab', this); return false;">Send Orders</a>
     </li>
     <li class="nav-item">
+        <a class="nav-link" href="#" onclick="showTab('test-tab', this); return false;">Run Tests</a>
+    </li>
+    <li class="nav-item">
         <a class="nav-link" href="#" onclick="showTab('system-log-tab', this); return false;">System Logs</a>
     </li>
 </ul>
@@ -99,6 +102,15 @@
                     </div>
                     
                     <button class="btn btn-success w-100 fw-bold py-2 mb-3" onclick="sendAtdlOrder()">Send ATDL Message</button>
+
+                    <div class="mt-2 mb-4 p-3 border rounded bg-light">
+                        <h6 class="mb-3 text-muted">Export Current Message:</h6>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToCucumber('atdl')">To Cucumber</button>
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToMultiMessage('atdl')">To Multi-Message</button>
+                            <button class="btn btn-outline-info btn-sm" onclick="exportToTemplate('atdl')">To Template</button>
+                        </div>
+                    </div>
                 </div>
 
                 <div>
@@ -199,6 +211,6 @@
     </div>
 </div>
 
-<script src="app.js?v=17"></script>
+<script src="app.js?v=19"></script>
 </body>
 </html>
