@@ -44,6 +44,12 @@ public class FixStepDefinitions {
 
     private static final Map<String, Map<String, Integer>> dictionaries = new HashMap<>();
 
+    private void reportMessage(String direction, String session, Message msg) {
+        String msgStr = msg.toString().replace("\u0001", "|");
+        String json = "@@TEST_MSG@@{\"direction\":\"" + direction + "\",\"session\":\"" + session + "\",\"message\":\"" + msgStr + "\"}";
+        System.out.println(json);
+    }
+
     private Map<String, Integer> getDictionaryForVersion(String version) {
         if (dictionaries.containsKey(version)) {
             return dictionaries.get(version);
@@ -142,6 +148,7 @@ public class FixStepDefinitions {
         }
 
         Session.sendToTarget(order, sessionID);
+        reportMessage("OUT", sessionID.toString(), order);
     }
 
     @When("I send a NewOrderSingle with alias {string} to session {string} with fields:")
@@ -178,6 +185,7 @@ public class FixStepDefinitions {
         }
 
         Session.sendToTarget(order, targetSession);
+        reportMessage("OUT", sessionString, order);
     }
 
     @Then("I expect an ExecutionReport for alias {string} within {int} seconds")
@@ -192,6 +200,7 @@ public class FixStepDefinitions {
                     Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
                         if (msg.getString(ClOrdID.FIELD).endsWith(expectedClOrdId)) {
+                            reportMessage("IN", event.sessionID.toString(), msg);
                             return true;
                         }
                     }
@@ -256,6 +265,7 @@ public class FixStepDefinitions {
                             }
                             if (allFieldsMatch) {
                                 if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
+                                reportMessage("IN", sessionString, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -323,6 +333,7 @@ public class FixStepDefinitions {
                                     scenarioContext.registerNewOrder(alias, msg.getString(11));
                                     System.out.println("   -> Assigned downstream ClOrdID '" + msg.getString(11) + "' to alias '" + alias + "'");
                                 }
+                                reportMessage("IN", sessionString, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
