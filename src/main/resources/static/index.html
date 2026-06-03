@@ -119,8 +119,27 @@
             <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllFeatures()">Deselect All</button>
             <button class="btn btn-sm btn-outline-primary ms-2" onclick="loadFeatureFiles()">Refresh List</button>
         </div>
-        <button class="btn btn-success mb-3" onclick="runTests()">Execute Selected Tests</button>
-        <pre id="testOutput" class="bg-dark text-light p-3 rounded" style="min-height: 200px; max-height: 500px; overflow-y: auto;">Awaiting execution...</pre>
+        <button class="btn btn-success mb-4" onclick="runTests()">Execute Selected Tests</button>
+        
+        <div class="row">
+            <div class="col-md-7">
+                <div class="table-responsive bg-white border rounded mb-3" style="height: 450px; overflow-y: auto;">
+                    <table id="testExecutionTable" class="table table-sm align-middle mb-0">
+                        <thead class="table-light" style="position: sticky; top: 0; z-index: 1;">
+                            <tr>
+                                <th>Scenario / Step</th>
+                                <th style="width: 80px;">Status</th>
+                                <th style="width: 50px;">Msg</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="col-md-5">
+                <pre id="testOutput" class="bg-dark text-light p-2 rounded" style="height: 450px; overflow-y: auto; font-size: 0.85em;">Awaiting execution...</pre>
+            </div>
+        </div>
     </div>
 
     <!-- System Logs Tab -->
@@ -150,6 +169,6 @@
     </div>
 </div>
 
-<script src="app.js?v=7"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>

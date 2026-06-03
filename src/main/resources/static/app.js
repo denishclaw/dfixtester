@@ -577,6 +577,7 @@ function deselectAllFeatures() {
 
 async function runTests() {
     const pre = document.getElementById('testOutput');
+    const tbody = document.querySelector('#testExecutionTable tbody');
     const selectedFeatures = Array.from(document.querySelectorAll('.feature-checkbox:checked')).map(cb => cb.value);
     
     if (document.querySelectorAll('.feature-checkbox').length > 0 && selectedFeatures.length === 0) {
@@ -585,6 +586,7 @@ async function runTests() {
 
     const featureParam = selectedFeatures.length > 0 ? `?feature=${encodeURIComponent(selectedFeatures.join(','))}` : '';
     
+    if (tbody) tbody.innerHTML = '';
     pre.textContent = "Running tests... Please wait.\n";
     
     try {
@@ -595,15 +597,91 @@ async function runTests() {
         const decoder = new TextDecoder('utf-8');
         pre.textContent = ""; // Clear waiting message once stream starts
         
+        let buffer = "";
+        let pendingMessages = [];
+
         while (true) {
             const { done, value } = await reader.read();
             if (done) break;
             
-            pre.textContent += decoder.decode(value, { stream: true });
-            pre.scrollTop = pre.scrollHeight; // Auto-scroll to bottom
+            buffer += decoder.decode(value, { stream: true });
+            let lines = buffer.split('\n');
+            buffer = lines.pop(); // hold the incomplete line
+            
+            for (let line of lines) {
+                if (line.startsWith('@@TEST_EVENT@@')) {
+                    try {
+                        const event = JSON.parse(line.substring(14));
+                        handleTestEvent(event, tbody, pendingMessages);
+                        if (event.event === 'TestStepFinished') pendingMessages = [];
+                    } catch(e) { console.error("Parse event error", e); }
+                } else if (line.startsWith('@@TEST_MSG@@')) {
+                    try {
+                        pendingMessages.push(JSON.parse(line.substring(12)));
+                    } catch(e) { console.error("Parse msg error", e); }
+                } else {
+                    pre.textContent += line + "\n";
+                    pre.scrollTop = pre.scrollHeight;
+                }
+            }
+        }
+        if (buffer && !buffer.startsWith('@@TEST_')) {
+            pre.textContent += buffer;
+            pre.scrollTop = pre.scrollHeight;
         }
     } catch (e) {
         pre.textContent += "\nError triggering tests: " + e;
+    }
+}
+
+function handleTestEvent(event, tbody, pendingMessages) {
+    if (!tbody) return;
+    if (event.event === 'TestCaseStarted') {
+        const tr = document.createElement('tr');
+        tr.className = 'table-secondary fw-bold';
+        tr.innerHTML = `<td colspan="3">${event.name}</td>`;
+        tbody.appendChild(tr);
+    } else if (event.event === 'TestStepFinished') {
+        const tr = document.createElement('tr');
+        
+        let statusBadge = '';
+        if (event.status === 'PASSED') statusBadge = '<span class="badge bg-success">PASS</span>';
+        else if (event.status === 'FAILED') statusBadge = '<span class="badge bg-danger">FAIL</span>';
+        else if (event.status === 'SKIPPED') statusBadge = '<span class="badge bg-warning text-dark">SKIP</span>';
+        else statusBadge = `<span class="badge bg-secondary">${event.status}</span>`;
+
+        let msgBtn = '';
+        if (pendingMessages.length > 0) {
+            const encoded = encodeURIComponent(JSON.stringify(pendingMessages));
+            msgBtn = `<button class="btn btn-sm btn-outline-info p-0 px-1" onclick="showTestStepMessages(this)" data-msgs="${encoded}" title="View FIX Messages">&#128233;</button>`;
+        }
+
+        tr.innerHTML = `
+            <td class="ps-4" style="word-break: break-word;">${event.name}</td>
+            <td>${statusBadge}</td>
+            <td>${msgBtn}</td>
+        `;
+        tbody.appendChild(tr);
+
+        if (event.status === 'FAILED' && event.error) {
+            const trErr = document.createElement('tr');
+            trErr.innerHTML = `<td colspan="3" class="text-danger small ps-4" style="white-space: pre-wrap;">${event.error}</td>`;
+            tbody.appendChild(trErr);
+        }
+        
+        const container = tbody.closest('.table-responsive');
+        if (container) container.scrollTop = container.scrollHeight;
+    }
+}
+
+function showTestStepMessages(btn) {
+    try {
+        const msgs = JSON.parse(decodeURIComponent(btn.getAttribute('data-msgs')));
+        if (msgs.length === 0) return;
+        const lastMsg = msgs[msgs.length - 1]; // typically the matched/sent message
+        showFixMessageDetails({ stopPropagation: () => {} }, lastMsg.message, lastMsg.session);
+    } catch(e) {
+        console.error("Could not show message", e);
     }
 }
 

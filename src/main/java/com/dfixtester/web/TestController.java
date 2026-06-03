@@ -64,6 +64,8 @@ public class TestController {
                 args.add("-p");
                 args.add("pretty"); // Format output nicely
                 args.add("-m"); // Monochrome output (strips ANSI color codes)
+                args.add("-p");
+                args.add("com.dfixtester.cucumber.LiveTestReporter"); // Live JSON Event Streamer
 
                 File featuresDir = getFeaturesDirectory();
                 if (feature != null && !feature.isEmpty()) {
