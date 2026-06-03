@@ -1158,12 +1158,29 @@ async function sendAtdlOrder() {
     const targetSession = document.getElementById('atdlTargetSessionSelect').value;
     if (!targetSession) return alert("Select a target session first.");
 
+    const stratName = document.getElementById('atdlStrategySelect').value;
+    if (!stratName && currentAtdlDoc) return alert("Please select an ATDL strategy.");
+
     const tagMap = {};
     
+    // Get the selected strategy node from the ATDL document
+    let stratNode = null;
+    if (currentAtdlDoc) {
+        const strategies = currentAtdlDoc.getElementsByTagNameNS("*", "Strategy");
+        for (let i = 0; i < strategies.length; i++) {
+            if (strategies[i].getAttribute('name') === stratName) {
+                stratNode = strategies[i];
+                break;
+            }
+        }
+    }
+
     // Gather base order fields from dynamic rows
     document.querySelectorAll('#atdlTagRows .tag-row').forEach(row => {
         const tagInput = row.querySelector('.fix-tag');
         const valInput = row.querySelector('.fix-val');
+        if (!tagInput || !valInput) return; // Skip if elements not found
+        
         const tag = tagInput.value.trim();
         let val = valInput.value.trim();
         
@@ -1177,6 +1194,21 @@ async function sendAtdlOrder() {
         
         if (tag && val) tagMap[tag] = val;
     });
+
+    // Gather ATDL strategy parameters, including hidden/constValue ones
+    if (stratNode) {
+        const params = stratNode.getElementsByTagNameNS("*", "Parameter");
+        for (let i = 0; i < params.length; i++) {
+            const p = params[i];
+            const fixTag = p.getAttribute('fixTag');
+            const constValue = p.getAttribute('constValue');
+            
+            // Add constValue parameters if not already set by a visible control
+            if (fixTag && constValue !== null && constValue !== undefined && !tagMap[fixTag]) {
+                tagMap[fixTag] = constValue;
+            }
+        }
+    }
 
     // Gather dynamic ATDL GUI form fields
     document.querySelectorAll('.atdl-input').forEach(input => {
@@ -1194,5 +1226,4 @@ async function sendAtdlOrder() {
     });
     
     if (!res.ok) alert("Error sending ATDL message: " + await res.text());
-    else alert("ATDL Message Sent Successfully!");
 }

@@ -78,11 +78,6 @@
                         <button class="btn btn-outline-secondary" onclick="loadAtdlFiles()">Refresh Files</button>
                     </div>
                     
-                    <div class="mb-3" id="atdlStrategyContainer" style="display: none;">
-                        <label class="form-label fw-bold">Strategy Template:</label>
-                        <select id="atdlStrategySelect" class="form-select mb-3" onchange="renderAtdlForm()"></select>
-                    </div>
-
                     <div id="atdlTemplateContainer" class="mb-3">
                         <label class="form-label fw-bold">ATDL Base Template</label>
                         <select id="atdlTemplateSelect" class="form-select" onchange="applyTemplate('atdl')">
@@ -93,6 +88,11 @@
                     <h6 class="mb-2 text-muted">Base Order Fields:</h6>
                     <div id="atdlTagRows"></div>
                     <button class="btn btn-secondary mb-3" onclick="addTagRow('', '', 'atdlTagRows')">+ Add Tag</button>
+
+                    <div class="mb-3" id="atdlStrategyContainer" style="display: none;">
+                        <label class="form-label fw-bold">Strategy Template:</label>
+                        <select id="atdlStrategySelect" class="form-select mb-3" onchange="renderAtdlForm()"></select>
+                    </div>
 
                     <div id="atdlFormContainer" class="p-3 border rounded bg-white shadow-sm mb-4" style="display: none;">
                         <!-- Dynamic ATDL controls will be injected here -->
@@ -199,6 +199,6 @@
     </div>
 </div>
 
-<script src="app.js?v=15"></script>
+<script src="app.js?v=16"></script>
 </body>
 </html>
