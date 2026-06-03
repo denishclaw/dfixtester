@@ -787,38 +787,37 @@ async function buildComparisonTables(outMsgs, inMsgs) {
 
         const outMap = {};
         const inMap = {};
-        const allTags = [];
+        const allTagsSet = new Set();
         
         const inValidatedTags = (inMsg && inMsg.validatedTags) ? inMsg.validatedTags : [];
         
-        if (outMsg) {
-            outMsg.message.split('|').forEach(field => {
+        function parseFields(msg, map) {
+            if (!msg) return;
+            msg.message.split('|').forEach(field => {
                 if (!field) return;
                 const parts = field.split('=');
                 if (parts.length === 2) {
-                    allTags.push(parts[0]);
-                    outMap[parts[0]] = parts[1];
+                    const tagNum = parseInt(parts[0], 10);
+                    if (!isNaN(tagNum)) {
+                        allTagsSet.add(tagNum);
+                        if (map[parts[0]] !== undefined) map[parts[0]] += ", " + parts[1]; // Handle repeating groups cleanly
+                        else map[parts[0]] = parts[1];
+                    }
                 }
             });
         }
         
-        if (inMsg) {
-            inMsg.message.split('|').forEach(field => {
-                if (!field) return;
-                const parts = field.split('=');
-                if (parts.length === 2) {
-                    if (!allTags.includes(parts[0])) allTags.push(parts[0]);
-                    inMap[parts[0]] = parts[1];
-                }
-            });
-        }
+        parseFields(outMsg, outMap);
+        parseFields(inMsg, inMap);
+        
+        const allTags = Array.from(allTagsSet).sort((a, b) => a - b);
 
         html += `
             <div class="d-flex bg-light border-bottom border-top">
                 <div class="w-50 p-2 border-end text-center text-primary fw-bold">Sent (OUT) ${outMsg ? '<br><small class="text-muted fw-normal">' + outMsg.session + '</small>' : ''}</div>
                 <div class="w-50 p-2 text-center text-success fw-bold">Received (IN) ${inMsg ? '<br><small class="text-muted fw-normal">' + inMsg.session + '</small>' : ''}</div>
             </div>
-            <table class="table table-sm table-bordered table-striped mb-0">
+            <table class="table table-sm table-bordered table-striped mb-0" style="table-layout: fixed;">
                 <thead class="table-light">
                     <tr>
                         <th class="ps-3" style="width: 10%;">Tag</th>
@@ -830,7 +829,8 @@ async function buildComparisonTables(outMsgs, inMsgs) {
                 <tbody>
         `;
         
-        allTags.forEach(tag => {
+        allTags.forEach(tagNum => {
+            const tag = tagNum.toString();
             const outVal = outMap[tag] !== undefined ? outMap[tag] : '';
             const inVal = inMap[tag] !== undefined ? inMap[tag] : '';
             const desc = localDictionary[tag] || '';
@@ -840,18 +840,18 @@ async function buildComparisonTables(outMsgs, inMsgs) {
                 highlightStyle = 'background-color: #fff3cd;'; // light yellow highlight for mismatched tags
             }
             
-            const isValidated = inValidatedTags.includes(parseInt(tag));
+            const isValidated = inValidatedTags.includes(tagNum);
             let badge = '';
             let inCellStyle = highlightStyle;
             if (isValidated) {
-                badge = ' <span class="text-success fs-6" title="Validated by Test">&#10003;</span>';
-                inCellStyle += ' border: 2px solid #198754; background-color: #d1e7dd; font-weight: bold;';
+                badge = ' <span class="badge bg-success ms-1" title="Validated by Test">&#10003;</span>';
+                inCellStyle = 'border: 2px solid #198754; background-color: #d1e7dd; font-weight: bold;';
             }
             
             html += `
                 <tr>
                     <td class="fw-bold ps-3">${tag}${badge}</td>
-                    <td class="text-muted">${desc}</td>
+                    <td class="text-muted text-truncate" title="${desc}">${desc}</td>
                     <td style="font-family: monospace; word-break: break-all; ${highlightStyle}">${outVal}</td>
                     <td style="font-family: monospace; word-break: break-all; ${inCellStyle}">${inVal}</td>
                 </tr>
