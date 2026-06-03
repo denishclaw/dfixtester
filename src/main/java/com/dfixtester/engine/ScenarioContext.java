@@ -33,6 +33,7 @@ public class ScenarioContext {
     private final Map<String, String> activeOrders = new ConcurrentHashMap<>();
     private final Map<String, String> aliasToClOrdId = new ConcurrentHashMap<>();
     private final Queue<MessageEvent> messageQueue = new ConcurrentLinkedQueue<>();
+    private final Map<String, String> sessionAliases = new ConcurrentHashMap<>();
 
     public void registerNewOrder(String alias, String clOrdId) {
         aliasToClOrdId.put(alias, clOrdId);
@@ -56,9 +57,18 @@ public class ScenarioContext {
         return aliasToClOrdId.get(alias);
     }
 
+    public void addSessionAlias(String alias, String sessionString) {
+        sessionAliases.put(alias, sessionString);
+    }
+
+    public String resolveSessionAlias(String aliasOrSessionString) {
+        return sessionAliases.getOrDefault(aliasOrSessionString, aliasOrSessionString);
+    }
+
     public void clear() {
         activeOrders.clear();
         aliasToClOrdId.clear();
         messageQueue.clear();
+        sessionAliases.clear();
     }
 }

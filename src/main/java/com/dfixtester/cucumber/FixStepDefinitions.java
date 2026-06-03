@@ -45,16 +45,8 @@ public class FixStepDefinitions {
     private static final Map<String, Map<String, Integer>> dictionaries = new HashMap<>();
 
     private void reportMessage(String direction, String session, Message msg) {
-        reportMessage(direction, session, msg, null);
-    }
-
-    private void reportMessage(String direction, String session, Message msg, java.util.Set<Integer> validatedTags) {
         String msgStr = msg.toString().replace("\u0001", "|");
-        String tagsJson = "[]";
-        if (validatedTags != null && !validatedTags.isEmpty()) {
-            tagsJson = "[" + validatedTags.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(",")) + "]";
-        }
-        String json = "@@TEST_MSG@@{\"direction\":\"" + direction + "\",\"session\":\"" + session + "\",\"message\":\"" + msgStr + "\",\"validatedTags\":" + tagsJson + "}";
+        String json = "@@TEST_MSG@@{\"direction\":\"" + direction + "\",\"session\":\"" + session + "\",\"message\":\"" + msgStr + "\"}";
         System.out.println(json);
     }
 
@@ -208,8 +200,7 @@ public class FixStepDefinitions {
                     Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
                         if (msg.getString(ClOrdID.FIELD).endsWith(expectedClOrdId)) {
-                            java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35, 11));
-                            reportMessage("IN", event.sessionID.toString(), msg, validated);
+                            reportMessage("IN", event.sessionID.toString(), msg);
                             return true;
                         }
                     }
@@ -273,14 +264,7 @@ public class FixStepDefinitions {
                             }
                             if (allFieldsMatch) {
                                 if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
-                                java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35));
-                                if (msg.isSetField(11)) validated.add(11);
-                                if (msg.isSetField(41)) validated.add(41);
-                                for (String key : expectedFields.keySet()) {
-                                    int tag = getTagId(key, version);
-                                    if (tag != -1) validated.add(tag);
-                                }
-                                reportMessage("IN", sessionString, msg, validated);
+                                reportMessage("IN", sessionString, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -348,13 +332,7 @@ public class FixStepDefinitions {
                                     scenarioContext.registerNewOrder(alias, msg.getString(11));
                                     System.out.println("   -> Assigned downstream ClOrdID '" + msg.getString(11) + "' to alias '" + alias + "'");
                                 }
-                                java.util.Set<Integer> validated = new java.util.HashSet<>(java.util.Arrays.asList(35));
-                                if (msg.isSetField(11)) validated.add(11);
-                                for (String key : expectedFields.keySet()) {
-                                    int tag = getTagId(key, version);
-                                    if (tag != -1) validated.add(tag);
-                                }
-                                reportMessage("IN", sessionString, msg, validated);
+                                reportMessage("IN", sessionString, msg);
                                 return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
@@ -370,40 +348,6 @@ public class FixStepDefinitions {
                               "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
                               "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
             throw new AssertionError(errorMsg, e);
-        }
-    }
-
-    @Then("I expect no message with MsgType {string} on session {string} for alias {string} within {int} seconds")
-    public void i_expect_no_message_on_session(String msgType, String sessionString, String alias, int timeoutSeconds) {
-        String expectedClOrdId = scenarioContext.getClOrdIdByAlias(alias);
-        if (expectedClOrdId == null) {
-            throw new IllegalArgumentException("Alias '" + alias + "' not found in scenario context.");
-        }
-
-        try {
-            Awaitility.await()
-                .atMost(Duration.ofSeconds(timeoutSeconds))
-                .pollInterval(Duration.ofMillis(200))
-                .until(() -> {
-                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
-                        Message msg = event.message;
-                        try {
-                            if (!msg.getHeader().getString(35).equals(msgType)) continue;
-                            if (!event.sessionID.toString().equals(sessionString)) continue;
-
-                            String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
-                            if (msgClOrdId.endsWith(expectedClOrdId)) {
-                                return true; // Message found! This triggers the AssertionError below
-                            }
-                        } catch (Exception e) {
-                            // Ignore
-                        }
-                    }
-                    return false;
-                });
-            throw new AssertionError("Expected NO message with MsgType '" + msgType + "' for alias '" + alias + "', but one arrived on session " + sessionString);
-        } catch (org.awaitility.core.ConditionTimeoutException e) {
-            System.out.println("   -> MATCHED! No message arrived within the " + timeoutSeconds + "s timeout period.");
         }
     }
 
