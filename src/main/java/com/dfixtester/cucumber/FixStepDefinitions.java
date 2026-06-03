@@ -225,6 +225,7 @@ public class FixStepDefinitions {
         String version = expectedSession.getBeginString();
 
         java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
+        java.util.List<String> rejectionReasons = new java.util.ArrayList<>();
 
         try {
             Awaitility.await()
@@ -251,7 +252,11 @@ public class FixStepDefinitions {
                             String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
                             
                             if (!msgClOrdId.endsWith(expectedClOrdId)) {
-                                if (isNewMessage) System.out.println("   -> REJECTED: ClOrdID mismatch. Expected to end with: '" + expectedClOrdId + "', Actual: '" + msgClOrdId + "'");
+                                if (isNewMessage) {
+                                    String reason = "ClOrdID mismatch. Expected to end with: '" + expectedClOrdId + "', Actual: '" + msgClOrdId + "'";
+                                    System.out.println("   -> REJECTED: " + reason);
+                                    rejectionReasons.add(reason);
+                                }
                                 continue;
                             }
 
@@ -260,11 +265,19 @@ public class FixStepDefinitions {
                                 int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1) {
                                     if (!msg.isSetField(tag)) {
-                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") is MISSING.");
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
                                         allFieldsMatch = false;
                                         break;
                                     } else if (!msg.getString(tag).equals(entry.getValue())) {
-                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'");
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
                                         allFieldsMatch = false;
                                         break;
                                     }
@@ -284,10 +297,13 @@ public class FixStepDefinitions {
                     return false;
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
-            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID ending with: " + expectedClOrdId + ") not found on session " + resolvedSession + ". " +
-                              "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
-                              "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
-            throw new AssertionError(errorMsg, e);
+            StringBuilder errorMsg = new StringBuilder("Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID ending with: " + expectedClOrdId + ") not found on session " + resolvedSession + ".\n");
+            if (!rejectionReasons.isEmpty()) {
+                errorMsg.append("Candidate messages were rejected due to:\n - ").append(String.join("\n - ", rejectionReasons)).append("\n");
+            }
+            errorMsg.append("Total messages in queue: ").append(scenarioContext.getMessageQueue().size()).append(".\n")
+                    .append("Queue contents: ").append(scenarioContext.getMessageQueue().toString().replace("\u0001", "|"));
+            throw new AssertionError(errorMsg.toString(), e);
         }
     }
 
@@ -299,6 +315,7 @@ public class FixStepDefinitions {
         String version = expectedSession.getBeginString();
         
         java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
+        java.util.List<String> rejectionReasons = new java.util.ArrayList<>();
 
         try {
             Awaitility.await()
@@ -325,11 +342,19 @@ public class FixStepDefinitions {
                                 int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1) {
                                     if (!msg.isSetField(tag)) {
-                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") is MISSING.");
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
                                         allFieldsMatch = false;
                                         break;
                                     } else if (!msg.getString(tag).equals(entry.getValue())) {
-                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'");
+                                        if (isNewMessage) {
+                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
+                                            System.out.println("   -> REJECTED: " + reason);
+                                            rejectionReasons.add(reason);
+                                        }
                                         allFieldsMatch = false;
                                         break;
                                     }
@@ -353,10 +378,13 @@ public class FixStepDefinitions {
                     return false;
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
-            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected routed message not found on session " + resolvedSession + ". " +
-                              "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
-                              "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
-            throw new AssertionError(errorMsg, e);
+            StringBuilder errorMsg = new StringBuilder("Timeout after " + timeoutSeconds + "s. Expected routed message not found on session " + resolvedSession + ".\n");
+            if (!rejectionReasons.isEmpty()) {
+                errorMsg.append("Candidate messages were rejected due to:\n - ").append(String.join("\n - ", rejectionReasons)).append("\n");
+            }
+            errorMsg.append("Total messages in queue: ").append(scenarioContext.getMessageQueue().size()).append(".\n")
+                    .append("Queue contents: ").append(scenarioContext.getMessageQueue().toString().replace("\u0001", "|"));
+            throw new AssertionError(errorMsg.toString(), e);
         }
     }
 
