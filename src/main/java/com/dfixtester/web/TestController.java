@@ -63,6 +63,7 @@ public class TestController {
                 args.add("com.dfixtester.cucumber"); // Package where your Step Definitions live
                 args.add("-p");
                 args.add("pretty"); // Format output nicely
+                args.add("-m"); // Monochrome output (strips ANSI color codes)
 
                 File featuresDir = getFeaturesDirectory();
                 if (feature != null && !feature.isEmpty()) {
