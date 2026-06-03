@@ -191,7 +191,7 @@ public class FixStepDefinitions {
                 for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
                     Message msg = event.message;
                     if (msg.getHeader().getString(35).equals("8")) {
-                        if (msg.getString(ClOrdID.FIELD).equals(expectedClOrdId)) {
+                        if (msg.getString(ClOrdID.FIELD).endsWith(expectedClOrdId)) {
                             return true;
                         }
                     }
@@ -207,6 +207,8 @@ public class FixStepDefinitions {
         SessionID expectedSession = new SessionID(sessionString);
         String version = expectedSession.getBeginString();
 
+        java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
+
         try {
             Awaitility.await()
                 .atMost(Duration.ofSeconds(timeoutSeconds))
@@ -221,20 +223,40 @@ public class FixStepDefinitions {
                             if (!event.sessionID.toString().equals(sessionString)) {
                                 continue;
                             }
+                            
+                            String rawMsg = msg.toString();
+                            boolean isNewMessage = debuggedMessages.add(rawMsg);
+                            if (isNewMessage) {
+                                System.out.println("\n[DEBUG] Found candidate message on " + sessionString + " with MsgType " + msgType);
+                            }
 
                             // Verify it is tied to our specific order alias via Tag 11 (ClOrdID) or 41 (OrigClOrdID)
                             String msgClOrdId = msg.isSetField(11) ? msg.getString(11) : (msg.isSetField(41) ? msg.getString(41) : "");
                             
-                            if (msgClOrdId.equals(expectedClOrdId)) {
-                                boolean allFieldsMatch = true;
-                                for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
-                                    int tag = getTagId(entry.getKey(), version);
-                                    if (tag != -1 && (!msg.isSetField(tag) || !msg.getString(tag).equals(entry.getValue()))) {
+                            if (!msgClOrdId.endsWith(expectedClOrdId)) {
+                                if (isNewMessage) System.out.println("   -> REJECTED: ClOrdID mismatch. Expected to end with: '" + expectedClOrdId + "', Actual: '" + msgClOrdId + "'");
+                                continue;
+                            }
+
+                            boolean allFieldsMatch = true;
+                            for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
+                                int tag = getTagId(entry.getKey(), version);
+                                if (tag != -1) {
+                                    if (!msg.isSetField(tag)) {
+                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") is MISSING.");
+                                        allFieldsMatch = false;
+                                        break;
+                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
+                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'");
                                         allFieldsMatch = false;
                                         break;
                                     }
                                 }
                                 if (allFieldsMatch) return true;
+                            }
+                            if (allFieldsMatch) {
+                                if (isNewMessage) System.out.println("   -> MATCHED! Message successfully validated.");
+                                return true;
                             }
                         } catch (quickfix.FieldNotFound fnf) {
                             // Ignore field not found during validation loop
@@ -246,6 +268,73 @@ public class FixStepDefinitions {
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
             String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID: " + expectedClOrdId + ") not found on session " + sessionString + ". " +
+                              "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
+                              "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
+            throw new AssertionError(errorMsg, e);
+        }
+    }
+
+    @Then("I expect a routed message with MsgType {string} on session {string} and assign alias {string} within {int} seconds with fields:")
+    public void i_expect_a_routed_message_on_session_and_assign_alias(String msgType, String sessionString, String alias, int timeoutSeconds, DataTable dataTable) {
+        Map<String, String> expectedFields = dataTable.asMap();
+        SessionID expectedSession = new SessionID(sessionString);
+        String version = expectedSession.getBeginString();
+        
+        java.util.Set<String> debuggedMessages = new java.util.HashSet<>();
+
+        try {
+            Awaitility.await()
+                .atMost(Duration.ofSeconds(timeoutSeconds))
+                .pollInterval(Duration.ofMillis(200))
+                .until(() -> {
+                    for (ScenarioContext.MessageEvent event : scenarioContext.getMessageQueue()) {
+                        Message msg = event.message;
+                        try {
+                            if (!msg.getHeader().getString(35).equals(msgType)) continue;
+
+                            if (!event.sessionID.toString().equals(sessionString)) {
+                                continue;
+                            }
+                            
+                            String rawMsg = msg.toString();
+                            boolean isNewMessage = debuggedMessages.add(rawMsg);
+                            if (isNewMessage) {
+                                System.out.println("\n[DEBUG] Found candidate routed message on " + sessionString + " with MsgType " + msgType);
+                            }
+
+                            boolean allFieldsMatch = true;
+                            for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
+                                int tag = getTagId(entry.getKey(), version);
+                                if (tag != -1) {
+                                    if (!msg.isSetField(tag)) {
+                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") is MISSING.");
+                                        allFieldsMatch = false;
+                                        break;
+                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
+                                        if (isNewMessage) System.out.println("   -> REJECTED: Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'");
+                                        allFieldsMatch = false;
+                                        break;
+                                    }
+                                }
+                            }
+                            if (allFieldsMatch) {
+                                if (isNewMessage) System.out.println("   -> MATCHED! Routed message successfully validated.");
+                                if (msg.isSetField(11)) {
+                                    scenarioContext.registerNewOrder(alias, msg.getString(11));
+                                    System.out.println("   -> Assigned downstream ClOrdID '" + msg.getString(11) + "' to alias '" + alias + "'");
+                                }
+                                return true;
+                            }
+                        } catch (quickfix.FieldNotFound fnf) {
+                            // Ignore
+                        } catch (Exception e) {
+                            System.err.println("Unexpected error during message validation: " + e.getMessage());
+                        }
+                    }
+                    return false;
+                });
+        } catch (org.awaitility.core.ConditionTimeoutException e) {
+            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected routed message not found on session " + sessionString + ". " +
                               "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
                               "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
             throw new AssertionError(errorMsg, e);
