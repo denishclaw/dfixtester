@@ -267,7 +267,7 @@ public class FixStepDefinitions {
                     return false;
                 });
         } catch (org.awaitility.core.ConditionTimeoutException e) {
-            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID: " + expectedClOrdId + ") not found on session " + sessionString + ". " +
+            String errorMsg = "Timeout after " + timeoutSeconds + "s. Expected message for alias '" + alias + "' (ClOrdID ending with: " + expectedClOrdId + ") not found on session " + sessionString + ". " +
                               "Total messages in queue: " + scenarioContext.getMessageQueue().size() + ". " +
                               "Queue contents: " + scenarioContext.getMessageQueue().toString().replace("\u0001", "|");
             throw new AssertionError(errorMsg, e);
