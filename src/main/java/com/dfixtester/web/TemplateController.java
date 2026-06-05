@@ -31,6 +31,11 @@ public class TemplateController {
     public ResponseEntity<List<Map<String, Object>>> getAtdlTemplates() {
         return ResponseEntity.ok(loadTemplatesFromFile("atdl-message-templates.json"));
     }
+    
+    @GetMapping("/multi-order")
+    public ResponseEntity<List<List<Map<String, String>>>> getMultiOrderTemplates() {
+        return ResponseEntity.ok(loadMultiOrderTemplatesFromFile("multi-order-templates.json"));
+    }
 
     private List<Map<String, Object>> loadTemplatesFromFile(String filename) {
         try {
@@ -50,6 +55,30 @@ public class TemplateController {
             }
             
             Resource resource = new ClassPathResource("config/" + filename);
+            if (resource.exists()) {
+                return objectMapper.readValue(resource.getInputStream(), new TypeReference<>() {});
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+        return new ArrayList<>();
+    }
+
+    private List<List<Map<String, String>>> loadMultiOrderTemplatesFromFile(String filename) {
+        try {
+            ApplicationHome home = new ApplicationHome(TemplateController.class);
+            File baseDir = home.getDir();
+
+            File extFile = new File(baseDir, "multi-order-templates/" + filename);
+            if (!extFile.exists()) {
+                extFile = new File(baseDir, filename); // Fallback to root for convenience
+            }
+
+            if (extFile.exists()) {
+                return objectMapper.readValue(extFile, new TypeReference<>() {});
+            }
+
+            Resource resource = new ClassPathResource("multi-order-templates/" + filename);
             if (resource.exists()) {
                 return objectMapper.readValue(resource.getInputStream(), new TypeReference<>() {});
             }

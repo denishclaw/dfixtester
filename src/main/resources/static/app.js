@@ -19,6 +19,7 @@ let sessionColorMap = {};
 let colorIndex = 0;
 let messageTemplates = [];
 let atdlMessageTemplates = [];
+let multiOrderTemplates = [];
 
 const sessionColors = [
     'table-light',
@@ -339,6 +340,25 @@ async function loadAtdlTemplates() {
     }
 }
 
+async function loadMultiOrderTemplates() {
+    try {
+        const res = await fetch('/api/templates/multi-order');
+        multiOrderTemplates = await res.json();
+        
+        const templateSelect = document.getElementById('multiOrderTemplateSelect');
+        if (templateSelect) {
+            templateSelect.innerHTML = '<option value="">-- Select Multi-Order Template --</option>';
+            multiOrderTemplates.forEach((tpl, idx) => {
+                const name = (tpl.length > 0 && tpl[0].name) ? tpl[0].name : `Template ${idx + 1}`;
+                templateSelect.add(new Option(name, idx));
+            });
+        }
+    } catch (err) {
+        console.error('Failed to load multi-order templates', err);
+    }
+}
+
+
 function applyTemplate(type = 'single') {
     let templateIdx, templates, containerId;
 
@@ -357,6 +377,9 @@ function applyTemplate(type = 'single') {
     const template = templates[templateIdx];
     
     const tagRowsContainer = document.getElementById(containerId);
+    if (!tagRowsContainer) {
+        return;
+    }
     tagRowsContainer.innerHTML = '';
     
     if (template && template.tags) {
@@ -365,6 +388,14 @@ function applyTemplate(type = 'single') {
         }
     }
 }
+
+function applyMultiOrderTemplate() {
+    const templateIdx = document.getElementById('multiOrderTemplateSelect').value;
+    if (templateIdx === "") return;
+    const template = multiOrderTemplates[templateIdx];
+    document.getElementById('replayJson').value = JSON.stringify(template, null, 2);
+}
+
 
 function generateFixTimestamp() {
     const d = new Date();
@@ -379,7 +410,7 @@ async function sendMessage() {
     if (!targetSession) return alert("Select a target session first.");
 
     const tagMap = {};
-    document.querySelectorAll('.tag-row').forEach(row => {
+    document.querySelectorAll('#tagRows .tag-row').forEach(row => {
         const tagInput = row.querySelector('.fix-tag');
         const valInput = row.querySelector('.fix-val');
         const tag = tagInput.value.trim();
