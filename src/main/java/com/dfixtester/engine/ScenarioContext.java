@@ -34,6 +34,7 @@ public class ScenarioContext {
     private final Map<String, String> aliasToClOrdId = new ConcurrentHashMap<>();
     private final Queue<MessageEvent> messageQueue = new ConcurrentLinkedQueue<>();
     private final Map<String, String> sessionAliases = new ConcurrentHashMap<>();
+    private final Map<String, Map<String, String>> parameterTemplates = new ConcurrentHashMap<>();
 
     public void registerNewOrder(String alias, String clOrdId) {
         aliasToClOrdId.put(alias, clOrdId);
@@ -65,10 +66,19 @@ public class ScenarioContext {
         return sessionAliases.getOrDefault(aliasOrSessionString, aliasOrSessionString);
     }
 
+    public void addParameterTemplate(String name, Map<String, String> fields) {
+        parameterTemplates.put(name, fields);
+    }
+
+    public Map<String, String> getParameterTemplate(String name) {
+        return parameterTemplates.getOrDefault(name, new java.util.HashMap<>());
+    }
+
     public void clear() {
         activeOrders.clear();
         aliasToClOrdId.clear();
         messageQueue.clear();
         sessionAliases.clear();
+        parameterTemplates.clear();
     }
 }

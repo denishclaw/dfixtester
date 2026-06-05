@@ -132,6 +132,11 @@ public class FixStepDefinitions {
         );
     }
 
+    @Given("I define parameter template {string} with fields:")
+    public void i_define_parameter_template(String templateName, DataTable dataTable) {
+        scenarioContext.addParameterTemplate(templateName, dataTable.asMap());
+    }
+
     @When("I send a NewOrderSingle with alias {string} and fields:")
     public void i_send_a_newordersingle(String alias, DataTable dataTable) throws Exception {
         Map<String, String> fields = dataTable.asMap();
@@ -167,8 +172,33 @@ public class FixStepDefinitions {
 
     @When("I send a NewOrderSingle with alias {string} to session {string} with fields:")
     public void i_send_a_newordersingle_to_session(String alias, String sessionString, DataTable dataTable) throws Exception {
+        sendOrderSingleHelper(alias, sessionString, dataTable.asMap());
+    }
+
+    @When("I send a NewOrderSingle with alias {string} to session {string} using templates {string}")
+    public void i_send_a_newordersingle_to_session_using_templates_only(String alias, String sessionString, String templatesStr) throws Exception {
+        Map<String, String> mergedFields = new HashMap<>();
+        for (String templateName : templatesStr.split(",")) {
+            mergedFields.putAll(scenarioContext.getParameterTemplate(templateName.trim()));
+        }
+        sendOrderSingleHelper(alias, sessionString, mergedFields);
+    }
+
+    @When("I send a NewOrderSingle with alias {string} to session {string} using templates {string} with fields:")
+    public void i_send_a_newordersingle_to_session_using_templates(String alias, String sessionString, String templatesStr, DataTable dataTable) throws Exception {
+        Map<String, String> mergedFields = new HashMap<>();
+        for (String templateName : templatesStr.split(",")) {
+            mergedFields.putAll(scenarioContext.getParameterTemplate(templateName.trim()));
+        }
+        if (dataTable != null) {
+            // Any explicit fields passed in the step will override the template defaults
+            mergedFields.putAll(dataTable.asMap());
+        }
+        sendOrderSingleHelper(alias, sessionString, mergedFields);
+    }
+
+    private void sendOrderSingleHelper(String alias, String sessionString, Map<String, String> fields) throws Exception {
         final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
-        Map<String, String> fields = dataTable.asMap();
         lastClOrdId = UUID.randomUUID().toString();
         
         scenarioContext.registerNewOrder(alias, lastClOrdId);
