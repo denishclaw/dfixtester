@@ -16,6 +16,7 @@ To run DFixTester effectively, ensure the following directories and files exist 
   * `atdl-message-templates.json`
 * **`features/`**: The directory where your Cucumber `.feature` BDD test scripts are stored.
 * **`atdl/`**: The directory to place your ATDL `.xml` strategy definition files.
+* **`multi-order-templates/`**: The directory where JSON templates for sending multiple sequential messages are stored (e.g., `multi-order-templates.json`).
 
 ---
 

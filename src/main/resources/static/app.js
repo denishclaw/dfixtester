@@ -997,19 +997,20 @@ function showTab(tabId, element) {
 
 async function loadAbout() {
     const container = document.getElementById('aboutContent');
+    if (!container) return;
     if (container.getAttribute('data-loaded') === 'true') return;
     
     try {
-        const res = await fetch('readme.md');
+        const res = await fetch('README.md');
         if (res.ok) {
             const text = await res.text();
             container.innerHTML = marked.parse(text);
             container.setAttribute('data-loaded', 'true');
         } else {
-            container.innerHTML = '<span class="text-danger">Failed to load system documentation (readme.md).</span>';
+            container.innerHTML = '<span class="text-danger">Failed to load system documentation (README.md).</span>';
         }
     } catch (e) {
-        console.error("Failed to fetch readme.md", e);
+        console.error("Failed to fetch README.md", e);
         container.innerHTML = '<span class="text-danger">Error loading system information.</span>';
     }
 }
