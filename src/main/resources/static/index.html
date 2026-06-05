@@ -23,6 +23,9 @@
     <li class="nav-item">
         <a class="nav-link" href="#" onclick="showTab('system-log-tab', this); return false;">System Logs</a>
     </li>
+    <li class="nav-item">
+        <a class="nav-link" href="#" onclick="showTab('about-tab', this); loadAbout(); return false;">About</a>
+    </li>
 </ul>
 
 <!-- Tab Content -->
@@ -115,15 +118,16 @@
 
                 <div>
                     <h4>Send Multiple Messages</h4>
+
+                    <label>Target Session:</label>
+                    <select id="replaySessionSelect" class="form-select mb-3"></select>
+
                     <div id="multiOrderTemplateContainer" class="mb-3">
                         <label class="form-label fw-bold">Multi-Order Template</label>
                         <select id="multiOrderTemplateSelect" class="form-select" onchange="applyMultiOrderTemplate()">
                             <option value="">-- Select Multi-Order Template --</option>
                         </select>
                     </div>
-
-                    <label>Target Session:</label>
-                    <select id="replaySessionSelect" class="form-select mb-3"></select>
                     
                     <textarea id="replayJson" class="form-control mb-3" rows="10" placeholder='[{"35":"D", "55":"AAPL"}]'></textarea>
                     <button class="btn btn-primary" onclick="replayMessages()">Send Multiple</button>
@@ -218,6 +222,6 @@
     </div>
 </div>
 
-<script src="app.js?v=22"></script>
+<script src="app.js?v=23"></script>
 </body>
 </html>
