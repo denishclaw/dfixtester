@@ -53,9 +53,17 @@ Here is the complete list of available step definitions for your `.feature` scen
 * `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" with fields:` (Followed by Data Table)
 * `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" using templates "{templateList}"`
 * `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" using templates "{templateList}" with fields:` (Followed by Data Table)
+* `When I send an OrderCancelRequest with alias "{alias}" for original order "{origAlias}" to session "{sessionString}" with fields:`
+* `When I send an OrderCancelReplaceRequest with alias "{alias}" for original order "{origAlias}" to session "{sessionString}" with fields:`
+* `When I send a raw FIX message to session "{sessionString}": "{rawMessage}"` (Uses `|` as delimiter)
 
 ### Validating Messages
 * `Then I expect an ExecutionReport for alias "{alias}" within {timeout} seconds`
 * `Then I expect a message with MsgType "{msgType}" on session "{sessionString}" for alias "{alias}" within {timeout} seconds with fields:` (Followed by Data Table)
 * `Then I expect a routed message with MsgType "{msgType}" on session "{sessionString}" and assign alias "{newAlias}" within {timeout} seconds with fields:` (Followed by Data Table)
 * `Then I expect an admin message with MsgType "{msgType}" on session "{sessionString}" within {timeout} seconds with fields:` (Followed by Data Table)
+* `Then I expect a BusinessMessageReject on session "{sessionString}" within {timeout} seconds with fields:` (Followed by Data Table)
+
+### Special Data Table Variables & Features
+* **``<ABSENT>`**`: Use this as a tag value in a validation Data Table to assert that the specific tag was completely removed or not present in the received message.
+* **Dynamic UTC Timestamps**: Use `<NOW>`, `<NOW+5m>`, `<NOW-2h>`, etc., in any order-sending Data Table. The framework will instantly resolve it into a valid `yyyyMMdd-HH:mm:ss.SSS` FIX UTC timestamp during execution!

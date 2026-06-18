@@ -26,6 +26,10 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.core.io.ClassPathResource;
@@ -37,6 +41,8 @@ public class FixStepDefinitions {
     
     private SessionID sessionID;
     private String lastClOrdId;
+    
+    private static final DateTimeFormatter FIX_UTC_TIMESTAMP_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMdd-HH:mm:ss.SSS").withZone(ZoneId.of("UTC"));
 
     public FixStepDefinitions() {
         this.scenarioContext = FixApplication.getActiveScenarioContext();
@@ -111,6 +117,34 @@ public class FixStepDefinitions {
         
         dictionaries.put(version, tagNameToId);
         return tagNameToId;
+    }
+
+    private Map<String, String> processDynamicFields(Map<String, String> fields) {
+        Map<String, String> processed = new HashMap<>();
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            String value = entry.getValue();
+            if (value != null && value.startsWith("<NOW")) {
+                Instant time = Instant.now();
+                if (value.contains("+") || value.contains("-")) {
+                    int sign = value.contains("+") ? 1 : -1;
+                    String[] parts = value.split("[\\+\\-]");
+                    if (parts.length == 2) {
+                        String amountStr = parts[1].replace(">", "").trim();
+                        try {
+                            int amount = Integer.parseInt(amountStr.substring(0, amountStr.length() - 1));
+                            if (amountStr.endsWith("m")) time = time.plus(sign * amount, ChronoUnit.MINUTES);
+                            else if (amountStr.endsWith("h")) time = time.plus(sign * amount, ChronoUnit.HOURS);
+                            else if (amountStr.endsWith("s")) time = time.plus(sign * amount, ChronoUnit.SECONDS);
+                            else if (amountStr.endsWith("d")) time = time.plus(sign * amount, ChronoUnit.DAYS);
+                        } catch (Exception e) { /* fallback on parsing error */ }
+                    }
+                }
+                processed.put(entry.getKey(), FIX_UTC_TIMESTAMP_FORMATTER.format(time));
+            } else {
+                processed.put(entry.getKey(), value);
+            }
+        }
+        return processed;
     }
 
     @Before
@@ -198,6 +232,7 @@ public class FixStepDefinitions {
     }
 
     private void sendOrderSingleHelper(String alias, String sessionString, Map<String, String> fields) throws Exception {
+        fields = processDynamicFields(fields);
         final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
         lastClOrdId = UUID.randomUUID().toString();
         
@@ -231,6 +266,54 @@ public class FixStepDefinitions {
 
         Session.sendToTarget(order, targetSession);
         reportMessage("OUT", resolvedSession, order);
+    }
+
+    private void sendGenericMessageHelper(String msgType, String alias, String origAlias, String sessionString, Map<String, String> fields) throws Exception {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
+        SessionID targetSession = new SessionID(resolvedSession);
+        String version = targetSession.getBeginString();
+
+        Message msg = new Message();
+        msg.getHeader().setString(35, msgType);
+
+        if (alias != null && !alias.isEmpty()) {
+            lastClOrdId = UUID.randomUUID().toString();
+            scenarioContext.registerNewOrder(alias, lastClOrdId);
+            msg.setString(11, lastClOrdId);
+        }
+        if (origAlias != null && !origAlias.isEmpty()) {
+            String origClOrdId = scenarioContext.getClOrdIdByAlias(origAlias);
+            if (origClOrdId != null) msg.setString(41, origClOrdId);
+        }
+
+        fields = processDynamicFields(fields);
+
+        for (Map.Entry<String, String> entry : fields.entrySet()) {
+            int tagId = getTagId(entry.getKey(), version);
+            if (tagId != -1) msg.setString(tagId, entry.getValue());
+        }
+
+        Session.sendToTarget(msg, targetSession);
+        reportMessage("OUT", resolvedSession, msg);
+    }
+
+    @When("I send an OrderCancelRequest with alias {string} for original order {string} to session {string} with fields:")
+    public void i_send_an_order_cancel_request(String alias, String origAlias, String sessionString, DataTable dataTable) throws Exception {
+        sendGenericMessageHelper("F", alias, origAlias, sessionString, dataTable.asMap());
+    }
+
+    @When("I send an OrderCancelReplaceRequest with alias {string} for original order {string} to session {string} with fields:")
+    public void i_send_an_order_cancel_replace_request(String alias, String origAlias, String sessionString, DataTable dataTable) throws Exception {
+        sendGenericMessageHelper("G", alias, origAlias, sessionString, dataTable.asMap());
+    }
+
+    @When("I send a raw FIX message to session {string}: {string}")
+    public void i_send_a_raw_fix_message(String sessionString, String rawMessage) throws Exception {
+        final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
+        SessionID targetSession = new SessionID(resolvedSession);
+        Message msg = new Message(rawMessage.replace("|", "\u0001"));
+        Session.sendToTarget(msg, targetSession);
+        reportMessage("OUT", resolvedSession, msg);
     }
 
     @Then("I expect an ExecutionReport for alias {string} within {int} seconds")
@@ -303,22 +386,35 @@ public class FixStepDefinitions {
                             for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
                                 int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1) {
-                                    if (!msg.isSetField(tag)) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    String expectedValue = entry.getValue();
+                                    if ("<ABSENT>".equals(expectedValue)) {
+                                        if (msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is PRESENT but expected to be ABSENT.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
-                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    } else {
+                                        if (!msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
+                                        } else if (!msg.getString(tag).equals(expectedValue)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + expectedValue + "', Actual: '" + msg.getString(tag) + "'";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
                                     }
                                 }
                             }
@@ -387,22 +483,35 @@ public class FixStepDefinitions {
                             for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
                                 int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1) {
-                                    if (!msg.isSetField(tag)) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    String expectedValue = entry.getValue();
+                                    if ("<ABSENT>".equals(expectedValue)) {
+                                        if (msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is PRESENT but expected to be ABSENT.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
-                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    } else {
+                                        if (!msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
+                                        } else if (!msg.getString(tag).equals(expectedValue)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + expectedValue + "', Actual: '" + msg.getString(tag) + "'";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
                                     }
                                 }
                             }
@@ -440,6 +549,11 @@ public class FixStepDefinitions {
         }
     }
 
+    @Then("I expect a BusinessMessageReject on session {string} within {int} seconds with fields:")
+    public void i_expect_a_business_message_reject(String sessionString, int timeoutSeconds, DataTable dataTable) {
+        i_expect_an_admin_message_on_session_with_fields("j", sessionString, timeoutSeconds, dataTable);
+    }
+
     @Then("I expect an admin message with MsgType {string} on session {string} within {int} seconds with fields:")
     public void i_expect_an_admin_message_on_session_with_fields(String msgType, String sessionString, int timeoutSeconds, DataTable dataTable) {
         final String resolvedSession = scenarioContext.resolveSessionAlias(sessionString);
@@ -474,22 +588,35 @@ public class FixStepDefinitions {
                             for (Map.Entry<String, String> entry : expectedFields.entrySet()) {
                                 int tag = getTagId(entry.getKey(), version);
                                 if (tag != -1) {
-                                    if (!msg.isSetField(tag)) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    String expectedValue = entry.getValue();
+                                    if ("<ABSENT>".equals(expectedValue)) {
+                                        if (msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is PRESENT but expected to be ABSENT.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
-                                    } else if (!msg.getString(tag).equals(entry.getValue())) {
-                                        if (isNewMessage) {
-                                            String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + entry.getValue() + "', Actual: '" + msg.getString(tag) + "'";
-                                            System.out.println("   -> REJECTED: " + reason);
-                                            rejectionReasons.add(reason);
+                                    } else {
+                                        if (!msg.isSetField(tag)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") is MISSING.";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
+                                        } else if (!msg.getString(tag).equals(expectedValue)) {
+                                            if (isNewMessage) {
+                                                String reason = "Tag " + tag + " (" + entry.getKey() + ") mismatch. Expected: '" + expectedValue + "', Actual: '" + msg.getString(tag) + "'";
+                                                System.out.println("   -> REJECTED: " + reason);
+                                                rejectionReasons.add(reason);
+                                            }
+                                            allFieldsMatch = false;
+                                            break;
                                         }
-                                        allFieldsMatch = false;
-                                        break;
                                     }
                                 }
                             }
