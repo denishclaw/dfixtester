@@ -37,3 +37,25 @@ The system is built on a modern Java Spring Boot stack and consists of three pri
 * **Order Entry & ATDL**: Dynamic FIX tag builders and an on-the-fly ATDL XML parser that generates algorithmic forms. Built messages can be exported instantly into Cucumber step formats.
 * **Test Runner Dashboard**: Live-streams Cucumber execution, tracking steps line-by-line. Features a rich side-by-side FIX message comparison view that explicitly highlights validated, missing, and mismatched tags in green and yellow.
 * **System Logs**: Streams raw QuickFIX/J socket logs via `SystemLogCapture` for deep debugging.
+
+---
+
+## Cucumber Steps Reference
+Here is the complete list of available step definitions for your `.feature` scenarios:
+
+### Configuration & Session Management
+* `Given I map session alias "{alias}" to "{sessionString}"`
+* `Given the session "{sessionString}" is logged on`
+* `Given I define parameter template "{templateName}" with fields:` (Followed by Data Table)
+
+### Sending Messages
+* `When I send a NewOrderSingle with alias "{alias}" and fields:` (Followed by Data Table)
+* `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" with fields:` (Followed by Data Table)
+* `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" using templates "{templateList}"`
+* `When I send a NewOrderSingle with alias "{alias}" to session "{sessionString}" using templates "{templateList}" with fields:` (Followed by Data Table)
+
+### Validating Messages
+* `Then I expect an ExecutionReport for alias "{alias}" within {timeout} seconds`
+* `Then I expect a message with MsgType "{msgType}" on session "{sessionString}" for alias "{alias}" within {timeout} seconds with fields:` (Followed by Data Table)
+* `Then I expect a routed message with MsgType "{msgType}" on session "{sessionString}" and assign alias "{newAlias}" within {timeout} seconds with fields:` (Followed by Data Table)
+* `Then I expect an admin message with MsgType "{msgType}" on session "{sessionString}" within {timeout} seconds with fields:` (Followed by Data Table)

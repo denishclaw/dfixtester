@@ -1001,16 +1001,16 @@ async function loadAbout() {
     if (container.getAttribute('data-loaded') === 'true') return;
     
     try {
-        const res = await fetch('README.md');
+        const res = await fetch('/api/docs/readme');
         if (res.ok) {
             const text = await res.text();
             container.innerHTML = marked.parse(text);
             container.setAttribute('data-loaded', 'true');
         } else {
-            container.innerHTML = '<span class="text-danger">Failed to load system documentation (README.md).</span>';
+            container.innerHTML = '<span class="text-danger">Failed to load system documentation from root (README.md).</span>';
         }
     } catch (e) {
-        console.error("Failed to fetch README.md", e);
+        console.error("Failed to fetch /api/docs/readme", e);
         container.innerHTML = '<span class="text-danger">Error loading system information.</span>';
     }
 }
